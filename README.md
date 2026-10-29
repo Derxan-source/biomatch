@@ -18,6 +18,8 @@ Abra `http://localhost:3000`. Para acesso de celulares na mesma rede Wi-Fi, use 
 ## Jogar
 
 - O anfitrião cria uma sala e escolhe 10, 15 ou 20 perguntas. Um código de seis caracteres é gerado para a turma.
+- A sala de espera mostra um QR e um link direto com o código já preenchido; quem entra ainda informa um apelido.
+- O anfitrião pode remover participantes da sala de espera ou da rodada em andamento.
 - Se a sala ainda estiver só com o anfitrião, o botão “Testar sozinho” permite responder e conferir as perguntas sem esperar por outra pessoa.
 - Até 30 pessoas, contando o anfitrião, entram com apelidos temporários.
 - O anfitrião inicia e projeta as perguntas; participantes respondem no próprio dispositivo.
@@ -26,7 +28,7 @@ Abra `http://localhost:3000`. Para acesso de celulares na mesma rede Wi-Fi, use 
 - Quando todos respondem ou o cronômetro termina, o servidor revela a alternativa correta, explica o conceito e atualiza o ranking. O anfitrião avança para a próxima.
 - O modo de estudo individual não tem cronômetro e mostra a explicação logo após cada escolha.
 
-O servidor é a autoridade para perguntas, cronômetro, respostas e pontos. Os apelidos não são permanentes. A sessão permite reconectar no mesmo navegador por até um minuto após uma queda. As salas e resultados ficam na memória do processo e somem quando ele reinicia.
+O servidor é a autoridade para perguntas, cronômetro, respostas e pontos. Os apelidos não são permanentes. A sessão fica salva na aba do navegador e permite reconectar no mesmo aparelho por até 15 minutos após uma queda, mantendo apelido, jogador e pontuação enquanto a sala existir. A interface tenta novamente com espera progressiva e verifica a conexão ao voltar para a aba. As salas e resultados ficam na memória do processo e somem quando ele reinicia ou encerra a sala.
 
 ## Conteúdo
 
@@ -41,6 +43,7 @@ O fundo WebGL roda somente na tela inicial de computadores; em telas estreitas e
 ## Arquivos
 
 - `index.html`, `styles.css`, `app.js`, `ambient-background.js`: interface, interações e fundo animado em WebGL com alternativa estática.
+- `qrcode-generator.js` e `qrcode-generator-LICENSE.txt`: gerador QR carregado localmente quando a sala de espera é exibida.
 - `questions.json`: banco de questões, gabarito e explicações.
 - `server.js`: HTTP, salas, regras multiplayer e batimento da conexão.
 - `load-test.js`: simulador de participantes para ensaios de carga (requer Node.js 22+).
