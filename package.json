@@ -1,0 +1,13 @@
+{
+  "name": "biomatch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Quiz ao vivo de Biologia com salas por código e WebSocket",
+  "engines": {
+    "node": ">=18 <25"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "load-test": "node load-test.js"
+  }
+}
