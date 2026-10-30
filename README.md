@@ -17,6 +17,7 @@ Abra `http://localhost:3000`. Para acesso de celulares na mesma rede Wi-Fi, use 
 
 ## Jogar
 
+- Na página inicial, escolha **Quiz com IA** para gerar questões novas por tema, ou **Quiz clássico** para usar o banco original do BioMatch. Os participantes continuam entrando pela mesma sala e código.
 - O anfitrião cria uma sala e escolhe 10, 15 ou 20 perguntas. Um código de seis caracteres é gerado para a turma.
 - A sala de espera mostra um QR e um link direto com o código já preenchido; quem entra ainda informa um apelido.
 - O anfitrião pode remover participantes da sala de espera ou da rodada em andamento.
@@ -65,3 +66,4 @@ node load-test.js --players 1 --questions 10
 ## Estado da validação
 
 O simulador completou 10 perguntas com 13 participantes em 56,8 s e com 30 participantes em 144,2 s, sem falhas, contra o servidor local. A resposta até a revelação levou em média 42 ms e 115 ms, respectivamente. Isso valida o fluxo de conexões simuladas em um único computador; não equivale a 30 aparelhos ou redes reais. Chrome Android, Safari iOS, reconexão em rede móvel e duração de uma rodada com turma ainda precisam de validação. Isso também não comprova capacidade de produção ou de múltiplas instâncias.
+

@@ -22,3 +22,12 @@ O serviço inicial está no plano gratuito para você experimentar. No Render, e
 ## Atualizar depois
 
 Envie as alterações para o mesmo repositório do GitHub. O Render publica a nova versão automaticamente. Evite fazer isso enquanto uma partida estiver acontecendo, pois a sala atual existe apenas na memória do processo.
+
+## Ativar a criação de perguntas por IA
+
+1. Crie uma chave de API na plataforma da OpenAI e guarde-a como segredo. Nunca a coloque em `app.js`, no GitHub ou em uma mensagem pública.
+2. No Render, abra o serviço `biomatch`, entre em **Environment** e adicione `OPENAI_API_KEY` com a chave. Opcionalmente, defina `OPENAI_MODEL` (padrão: `gpt-4o-mini`) e salve para iniciar um novo deploy.
+3. Na página inicial, escolha **Quiz com IA**, informe um tema e escolha o número de perguntas. O servidor gera questões, tenta confirmar cada resposta em trechos da Wikipédia em português, faz uma revisão adicional pela OpenAI e descarta perguntas repetidas ou sem evidência suficiente. As fontes aprovadas aparecem com a resposta. **Quiz clássico** continua usando o banco original.
+
+Cada geração pode ter custo de API e há um limite de três gerações por minuto no serviço. Perguntas semelhantes às do banco atual e às já geradas desde o último reinício são rejeitadas. A verificação reduz o risco de erro, mas não representa garantia absoluta de verdade: confira as fontes em assuntos importantes. Se não houver perguntas suficientes confirmadas, o sistema não inicia um quiz incompleto e orienta a escolher outro tema. Sem tema informado, permanece disponível o banco atual de questões revisadas.
+
