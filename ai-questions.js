@@ -3,8 +3,8 @@ const crypto=require('node:crypto');
 const generatedHistory=[];
 
 module.exports=async function generateQuestions(input,existing){
-  const apiKey=process.env.NVIDIA_API_KEY||process.env.OPENAI_API_KEY;
-  if(!apiKey){const e=new Error('AI key is not configured');e.status=503;e.publicMessage='A criação por IA ainda não está ativada. Configure NVIDIA_API_KEY como segredo no Render.';throw e}
+  const apiKey=process.env.GEMINI_API_KEY||process.env.NVIDIA_API_KEY||process.env.OPENAI_API_KEY;
+  if(!apiKey){const e=new Error('AI key is not configured');e.status=503;e.publicMessage='A criação por IA ainda não está ativada. Configure GEMINI_API_KEY como segredo no Render.';throw e}
   const topic=typeof input.topic==='string'?clean(input.topic,100):'',count=Number(input.count);
   if(topic.length<3||![10,15,20].includes(count)){const e=new Error('Invalid topic or count');e.status=400;e.publicMessage='Informe um tema com pelo menos 3 caracteres e selecione 10, 15 ou 20 perguntas.';throw e}
   const oldQuestions=existing.map(q=>q.question).concat(generatedHistory),known=new Set(oldQuestions.map(q=>normalize(q)));
@@ -29,6 +29,7 @@ module.exports=async function generateQuestions(input,existing){
 };
 
 async function ask(messages,maxTokens=5000){
+  if(process.env.GEMINI_API_KEY)return askGemini(messages,maxTokens);
   const useNvidia=Boolean(process.env.NVIDIA_API_KEY),key=process.env.NVIDIA_API_KEY||process.env.OPENAI_API_KEY;
   const endpoint=useNvidia?'https://integrate.api.nvidia.com/v1/chat/completions':'https://api.openai.com/v1/chat/completions';
   const provider=useNvidia?'NVIDIA':'OpenAI';
@@ -39,6 +40,18 @@ async function ask(messages,maxTokens=5000){
     if(!response.ok){const payload=await response.json().catch(()=>({})),details=payload.error||{},code=String(details.code||details.type||''),error=new Error(provider+' HTTP '+response.status+(code?' '+code:''));error.status=502;error.publicMessage=response.status===401||response.status===403?'A chave ou permissão da NVIDIA não foi aceita. Confira NVIDIA_API_KEY e o acesso ao modelo no NVIDIA Build.':response.status===429?'A NVIDIA limitou temporariamente as requisições. Aguarde um pouco e tente novamente.':provider+' não conseguiu gerar as perguntas. Tente novamente mais tarde.';throw error}
     const data=await response.json(),content=data.choices&&data.choices[0]&&data.choices[0].message.content;
     if(!content)throw new Error(provider+' returned no content');return parseJson(content);
+  }finally{clearTimeout(timeout)}
+}
+async function askGemini(messages,maxTokens){
+  const model=process.env.GEMINI_MODEL||'gemini-2.5-flash';
+  const system=messages.find(m=>m.role==='system')?.content||'';
+  const user=messages.filter(m=>m.role==='user').map(m=>m.content).join('\n\n');
+  const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),45000);
+  try{
+    const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'x-goog-api-key':process.env.GEMINI_API_KEY,'content-type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig:{temperature:0.2,maxOutputTokens:maxTokens,responseMimeType:'application/json'}}),signal:abort.signal});
+    if(!response.ok){const payload=await response.json().catch(()=>({})),code=String(payload.error?.status||response.status),error=new Error('Gemini HTTP '+response.status+' '+code);error.status=502;error.publicMessage=response.status===401||response.status===403?'A chave do Gemini não foi aceita. Confira GEMINI_API_KEY no Render.':response.status===429?'O Gemini limitou temporariamente as requisições. Confira o limite de uso da API e tente novamente.':response.status===404?'O modelo Gemini configurado não está disponível. Confira GEMINI_MODEL.':'O Gemini não conseguiu gerar as perguntas. Tente novamente mais tarde.';throw error}
+    const data=await response.json(),content=data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('');
+    if(!content)throw new Error('Gemini returned no content');return parseJson(content);
   }finally{clearTimeout(timeout)}
 }
 function parseJson(content){const text=String(content).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');try{return JSON.parse(text)}catch{const start=text.indexOf('{'),end=text.lastIndexOf('}');if(start>=0&&end>start)return JSON.parse(text.slice(start,end+1));throw new Error('AI returned invalid JSON')}}
