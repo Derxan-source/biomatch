@@ -3,8 +3,8 @@ const crypto=require('node:crypto');
 const generatedHistory=[];
 
 module.exports=async function generateQuestions(input,existing){
-  const apiKey=process.env.OPENAI_API_KEY;
-  if(!apiKey){const e=new Error('OpenAI key is not configured');e.status=503;e.publicMessage='A criação por IA ainda não está ativada. Configure OPENAI_API_KEY como segredo no Render.';throw e}
+  const apiKey=process.env.NVIDIA_API_KEY||process.env.OPENAI_API_KEY;
+  if(!apiKey){const e=new Error('AI key is not configured');e.status=503;e.publicMessage='A criação por IA ainda não está ativada. Configure NVIDIA_API_KEY como segredo no Render.';throw e}
   const topic=typeof input.topic==='string'?clean(input.topic,100):'',count=Number(input.count);
   if(topic.length<3||![10,15,20].includes(count)){const e=new Error('Invalid topic or count');e.status=400;e.publicMessage='Informe um tema com pelo menos 3 caracteres e selecione 10, 15 ou 20 perguntas.';throw e}
   const oldQuestions=existing.map(q=>q.question).concat(generatedHistory),known=new Set(oldQuestions.map(q=>normalize(q)));
@@ -29,14 +29,19 @@ module.exports=async function generateQuestions(input,existing){
 };
 
 async function ask(messages,maxTokens=5000){
+  const useNvidia=Boolean(process.env.NVIDIA_API_KEY),key=process.env.NVIDIA_API_KEY||process.env.OPENAI_API_KEY;
+  const endpoint=useNvidia?'https://integrate.api.nvidia.com/v1/chat/completions':'https://api.openai.com/v1/chat/completions';
+  const provider=useNvidia?'NVIDIA':'OpenAI';
+  const model=useNvidia?(process.env.NVIDIA_MODEL||'meta/llama-3.3-70b-instruct'):(process.env.OPENAI_MODEL||'gpt-4o-mini');
   const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),45000);
   try{
-    const response=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{authorization:'Bearer '+process.env.OPENAI_API_KEY,'content-type':'application/json'},body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-4o-mini',temperature:0.2,max_tokens:maxTokens,response_format:{type:'json_object'},messages}),signal:abort.signal});
-    if(!response.ok){const payload=await response.json().catch(()=>({})),details=payload.error||{},code=String(details.code||details.type||''),message=String(details.message||'').slice(0,240),error=new Error('OpenAI HTTP '+response.status+(code?' '+code:'')+(message?' '+message:''));error.status=502;error.publicMessage=response.status===429?'A OpenAI recusou a geração com erro 429. Confira os créditos, limites de uso e limites de requisições da conta da API.':response.status===401?'A chave da OpenAI no Render não foi aceita. Confira OPENAI_API_KEY nas variáveis do serviço.':'A OpenAI não conseguiu gerar as perguntas. Tente novamente mais tarde.';throw error}
+    const response=await fetch(endpoint,{method:'POST',headers:{authorization:'Bearer '+key,'content-type':'application/json'},body:JSON.stringify({model,temperature:0.2,max_tokens:maxTokens,messages,stream:false}),signal:abort.signal});
+    if(!response.ok){const payload=await response.json().catch(()=>({})),details=payload.error||{},code=String(details.code||details.type||''),error=new Error(provider+' HTTP '+response.status+(code?' '+code:''));error.status=502;error.publicMessage=response.status===401||response.status===403?'A chave ou permissão da NVIDIA não foi aceita. Confira NVIDIA_API_KEY e o acesso ao modelo no NVIDIA Build.':response.status===429?'A NVIDIA limitou temporariamente as requisições. Aguarde um pouco e tente novamente.':provider+' não conseguiu gerar as perguntas. Tente novamente mais tarde.';throw error}
     const data=await response.json(),content=data.choices&&data.choices[0]&&data.choices[0].message.content;
-    if(!content)throw new Error('OpenAI returned no content');return JSON.parse(content);
+    if(!content)throw new Error(provider+' returned no content');return parseJson(content);
   }finally{clearTimeout(timeout)}
 }
+function parseJson(content){const text=String(content).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');try{return JSON.parse(text)}catch{const start=text.indexOf('{'),end=text.lastIndexOf('}');if(start>=0&&end>start)return JSON.parse(text.slice(start,end+1));throw new Error('AI returned invalid JSON')}}
 async function wikipediaEvidence(query){
   const params=new URLSearchParams({action:'query',generator:'search',gsrsearch:String(query||'').slice(0,180),gsrlimit:'5',prop:'extracts|info',exintro:'1',explaintext:'1',inprop:'url',format:'json'}),url='https://pt.wikipedia.org/w/api.php?'+params;
   const response=await fetch(url,{headers:{'user-agent':'BioMatchQuiz/1.0 (educational fact-checking)'}});
