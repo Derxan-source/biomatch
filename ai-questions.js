@@ -43,7 +43,7 @@ async function ask(messages,maxTokens=5000){
   }finally{clearTimeout(timeout)}
 }
 async function askGemini(messages,maxTokens){
-  const model=process.env.GEMINI_MODEL||'gemini-2.5-flash';
+  const model=process.env.GEMINI_MODEL||'gemini-2.5-flash-lite';
   const system=messages.find(m=>m.role==='system')?.content||'';
   const user=messages.filter(m=>m.role==='user').map(m=>m.content).join('\n\n');
   const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),45000);
