@@ -52,11 +52,11 @@ async function askGemini(messages,maxTokens){
 }
 function parseJson(content){const text=String(content).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');try{return JSON.parse(text)}catch{const start=text.indexOf('{'),end=text.lastIndexOf('}');if(start>=0&&end>start)return JSON.parse(text.slice(start,end+1));throw new Error('AI returned invalid JSON')}}
 async function wikipediaEvidence(query){
-  const params=new URLSearchParams({action:'query',generator:'search',gsrsearch:String(query||'').slice(0,180),gsrlimit:'5',prop:'extracts|info',exintro:'1',explaintext:'1',inprop:'url',format:'json'}),url='https://pt.wikipedia.org/w/api.php?'+params;
-  const response=await fetch(url,{headers:{'user-agent':'BioMatchQuiz/1.0 (educational fact-checking)'}});
+  const url='https://pt.wikipedia.org/w/api.php?'+new URLSearchParams({action:'query',list:'search',srsearch:String(query||'').slice(0,120),srnamespace:'0',srlimit:'2',format:'json',origin:'*'});
+  const response=await fetch(url,{headers:{'user-agent':'BioMatchQuiz/1.0 (educational fact-checking; contact: support@biomatch.app)'}});
   if(!response.ok){const e=new Error('Evidence HTTP '+response.status);e.status=response.status;throw e}
   const data=await response.json();
-  return Object.values(data.query&&data.query.pages||{}).filter(p=>p.extract&&p.fullurl).map(p=>({title:p.title,url:p.fullurl,excerpt:p.extract.slice(0,1000)})).slice(0,3);
+  return (data.query?.search||[]).filter(p=>p.title&&p.snippet).map(p=>({title:p.title,url:'https://pt.wikipedia.org/wiki/'+encodeURIComponent(p.title.replace(/ /g,'_')),excerpt:p.snippet.replace(/<[^>]*>/g,' ').slice(0,1000)})).slice(0,2);
 }
 function valid(q){return q&&typeof q.topic==='string'&&typeof q.question==='string'&&Array.isArray(q.options)&&q.options.length===4&&q.options.every(x=>typeof x==='string'&&x.trim())&&Number.isInteger(q.answer)&&q.answer>=0&&q.answer<4&&typeof q.explanation==='string'&&q.explanation.trim()&&typeof q.fact==='string'&&typeof q.search==='string'}
 function clean(s,max){return String(s||'').replace(/<[^>]*>/g,'').replace(/[\u0000-\u001f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max)}
