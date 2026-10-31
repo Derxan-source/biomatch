@@ -8,14 +8,16 @@ module.exports=async function generateQuestions(input,existing){
   const topic=typeof input.topic==='string'?clean(input.topic,100):'',count=Number(input.count);
   if(topic.length<3||![10,15,20].includes(count)){const e=new Error('Invalid topic or count');e.status=400;e.publicMessage='Informe um tema com pelo menos 3 caracteres e selecione 10, 15 ou 20 perguntas.';throw e}
   const oldQuestions=existing.map(q=>q.question).concat(generatedHistory),known=new Set(oldQuestions.map(q=>normalize(q)));
-  const generated=await ask([{role:'system',content:'Você escreve questões didáticas de biologia em português. Faça questões objetivas de múltipla escolha, exatamente quatro alternativas e só uma correta. Cada item inclui topic, question, options, answer (índice começando em 0), explanation, fact (afirmação que deve ser verificada), search (termo de busca). Evite controvérsias, fatos recentes e ambiguidade. Não invente URLs nem citações. Retorne JSON: {"questions":[...]}'},{role:'user',content:'Crie '+count+' questões distintas sobre: '+topic+'. Evite estes enunciados: '+oldQuestions.join(' | ')}]);
-  const proposals=Array.isArray(generated.questions)?generated.questions.slice(0,count):[];
+  const candidateCount=Math.min(count*2,40);
+  const generated=await ask([{role:'system',content:'Você escreve questões didáticas de biologia em português. Gere um banco maior de questões objetivas independentes para podermos verificar e descartar as que não tenham fontes. Faça exatamente quatro alternativas e só uma correta por item. Cada item inclui topic, question, options, answer (índice começando em 0), explanation, fact (afirmação específica a verificar), search (frase curta e específica em português que ajude a localizar essa afirmação em uma enciclopédia). Evite controvérsias, fatos recentes, generalidades e duplicatas. Não invente URLs nem citações. Retorne JSON: {"questions":[...]}'},{role:'user',content:'Crie '+candidateCount+' questões distintas sobre: '+topic+'. Evite estes enunciados: '+oldQuestions.join(' | ')}],9000);
+  const proposals=Array.isArray(generated.questions)?generated.questions.slice(0,candidateCount):[];
   if(proposals.length<count){const e=new Error('Insufficient AI output');e.publicMessage='A IA não gerou perguntas suficientes. Tente outro tema.';throw e}
   const candidates=[],reserved=new Set(known);
   for(const q of proposals){
     if(!valid(q)||[...reserved].some(old=>tooSimilar(old,normalize(q.question))))continue;
     reserved.add(normalize(q.question));
-    const sources=await wikipediaEvidence(q.search||q.fact);
+    let sources=await wikipediaEvidence(q.search||q.fact);
+    if(!sources.length&&q.fact)sources=await wikipediaEvidence(q.fact);
     if(sources.length)candidates.push({question:q,sources});
     if(candidates.length===count)break;
   }
