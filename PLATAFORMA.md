@@ -41,3 +41,7 @@ npm install
 npm start
 ```
 Se as variáveis Turso não estiverem definidas, o desenvolvimento local cria `biomatch.local.db` no diretório do projeto.
+
+
+## Login e contas
+A tela inicial oferece entrada por e-mail e senha, criação de conta e modo visitante. As senhas são derivadas com scrypt e salt aleatório; sessões usam tokens aleatórios cujo hash SHA-256 é armazenado em auth_sessions, com validade de 30 dias. O endpoint /api/auth trata cadastro, login e logout. O acesso Google aparece como opção futura, mas não autentica ainda; recuperação de senha também permanece pendente. O visitante continua disponível e mantém progresso vinculado ao navegador.
