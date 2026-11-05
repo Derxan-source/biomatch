@@ -31,47 +31,11 @@ CREATE TABLE IF NOT EXISTS question_attempts (
   UNIQUE(user_id, question_id)
 );
 CREATE INDEX IF NOT EXISTS idx_attempts_user_created ON question_attempts(user_id, created_at DESC);
-CREATE TABLE IF NOT EXISTS friendships (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  requester_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  addressee_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined')),
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE(requester_id, addressee_id),
-  CHECK(requester_id <> addressee_id)
-);
-CREATE TABLE IF NOT EXISTS direct_messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 240),
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_messages_conversation ON direct_messages(sender_id, recipient_id, created_at DESC);
-CREATE TABLE IF NOT EXISTS challenges (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  challenger_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  challenged_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined', 'completed')),
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  CHECK(challenger_id <> challenged_id)
-);
-CREATE INDEX IF NOT EXISTS idx_challenges_users ON challenges(challenger_id, challenged_id, created_at DESC);
-
-
 CREATE TABLE IF NOT EXISTS live_rooms (
   code TEXT PRIMARY KEY,
   state_json TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE TABLE IF NOT EXISTS live_question_sets (
-  token TEXT PRIMARY KEY,
-  state_json TEXT NOT NULL,
-  expires_at INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_live_question_sets_expiry ON live_question_sets(expires_at);
-
 CREATE TABLE IF NOT EXISTS auth_sessions (
  token_hash TEXT PRIMARY KEY,
  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

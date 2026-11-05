@@ -124,9 +124,23 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     const snapshot = await api('GET', 'snapshot', {}, id);
     assert.equal(snapshot.status, 200);
     assert.equal(snapshot.data.profile.name, 'Teste Turso');
+    assert.deepEqual(Object.keys(snapshot.data), ['profile']);
+    for (const action of ['friend', 'message', 'challenge']) {
+      const disabled = await api('POST', action, { name: 'Outro', to: 'Outro', text: 'Oi' }, id);
+      assert.equal(disabled.status, 404, `${action} stays unavailable until safety controls exist`);
+    }
 
+    const subjects = ['Biologia', 'Química', 'História', 'Informática'];
+    for (const subject of subjects) {
+      const subjectQuestions = questionBank.filter(q => q.subject === subject);
+      assert.equal(subjectQuestions.length, 5, `${subject} must have five starter questions`);
+      for (const question of subjectQuestions) {
+        assert.equal(question.options.length, 4, `${question.id} must have four choices`);
+        assert.ok(Number.isInteger(question.answer) && question.answer >= 0 && question.answer < 4, `${question.id} must have a valid answer`);
+        assert.ok(question.explanation.length > 0, `${question.id} must explain its answer`);
+      }
+    }
     const biology = questionBank.find(q => q.subject === 'Biologia');
-    assert.ok(biology, 'A bank must contain Biology questions');
     const answer = await api('POST', 'answer', { questionId: biology.id, choice: biology.answer }, id);
     assert.equal(answer.status, 200);
     assert.equal(answer.data.correct, true);
@@ -150,12 +164,6 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     const restored = await liveStore.loadRooms();
     assert.ok(restored.some(item => item.code === room.code));
     await liveStore.deleteRoom(room.code);
-
-    const token = 'test-question-token';
-    await liveStore.saveQuestionSet(token, { questions: [biology], count: 1, expires: Date.now() + 10000 });
-    const set = await liveStore.takeQuestionSet(token);
-    assert.equal(set.count, 1);
-    assert.equal(await liveStore.takeQuestionSet(token), null);
 
     await db.close();
     console.log('Persistence tests passed: email/Google authentication, password reset expiry/hash/use-once/session revocation, guests, progress, duplicate protection, leaderboard and live persistence.');

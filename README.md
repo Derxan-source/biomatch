@@ -1,14 +1,15 @@
 # BioMatch
 
-BioMatch é um quiz ao vivo de Biologia para navegador. Uma pessoa conduz a rodada numa tela compartilhada; os demais entram por código e respondem pelo próprio celular. Após cada pergunta, a turma vê o gabarito, uma explicação e o placar. A direção visual usa um laboratório escuro e editorial, com uma paleta própria para as alternativas.
+BioMatch é uma plataforma educacional gamificada para Biologia, Química, História e Informática, com modo visitante, contas, progresso salvo e partidas ao vivo. A interface usa uma direção escura com verde e destaca a aprendizagem por etapas.
 
 ## Executar
 
-Requer Node.js 18 ou mais recente. O servidor não usa dependências externas.
+Requer Node.js 22.22.0, conforme `.node-version` e `package.json`.
 
 ```powershell
-cd outputs/BioMatch
-node server.js
+cd biomatch
+npm ci
+npm start
 ```
 
 Abra `http://localhost:3000`. Para acesso de celulares na mesma rede Wi-Fi, use o endereço local do computador que executa o servidor, por exemplo `http://192.168.x.x:3000`. A rede precisa permitir comunicação entre aparelhos.
@@ -17,7 +18,7 @@ Abra `http://localhost:3000`. Para acesso de celulares na mesma rede Wi-Fi, use 
 
 ## Jogar
 
-- Na página inicial, escolha **Quiz com IA** para gerar questões novas por tema, ou **Quiz clássico** para usar o banco original do BioMatch. Os participantes continuam entrando pela mesma sala e código.
+- No painel, escolha uma disciplina para estudar no seu ritmo ou crie uma partida ao vivo com o banco de questões.
 - O anfitrião cria uma sala e escolhe 10, 15 ou 20 perguntas. Um código de seis caracteres é gerado para a turma.
 - A sala de espera mostra um QR e um link direto com o código já preenchido; quem entra ainda informa um apelido.
 - O anfitrião pode remover participantes da sala de espera ou da rodada em andamento.
@@ -29,15 +30,15 @@ Abra `http://localhost:3000`. Para acesso de celulares na mesma rede Wi-Fi, use 
 - Quando todos respondem ou o cronômetro termina, o servidor revela a alternativa correta, explica o conceito e atualiza o ranking. O anfitrião avança para a próxima.
 - O modo de estudo individual não tem cronômetro e mostra a explicação logo após cada escolha.
 
-O servidor é a autoridade para perguntas, cronômetro, respostas e pontos. Os apelidos não são permanentes. A sessão fica salva na aba do navegador e permite reconectar no mesmo aparelho por até 15 minutos após uma queda, mantendo apelido, jogador e pontuação enquanto a sala existir. A interface tenta novamente com espera progressiva e verifica a conexão ao voltar para a aba. As salas e resultados ficam na memória do processo e somem quando ele reinicia ou encerra a sala.
+O servidor é a autoridade para perguntas, cronômetro, respostas e pontos. O estado durável das salas e placares fica no Turso e é restaurado após reinício. Sockets e timers permanecem em memória enquanto o processo está ativo. A sessão fica salva no navegador e permite reconectar no mesmo aparelho por até 15 minutos após uma queda.
 
 ## Conteúdo
 
-`questions.json` é a fonte única do banco com 20 questões de genética, citologia, ecologia, evolução, fisiologia e biotecnologia. Cada item traz quatro alternativas, gabarito e explicação curta. É uma base de revisão; antes do uso escolar, confirme os tópicos efetivamente estudados e compare as respostas com o material do professor.
+`questions.json` é a fonte única do banco inicial com 20 questões distribuídas entre Biologia, Química, História e Informática. Cada item traz quatro alternativas, gabarito e explicação curta. É uma base de revisão; antes do uso escolar, confirme os tópicos efetivamente estudados e compare as respostas com o material do professor.
 
 ## Implantação na internet
 
-O projeto já inclui `package.json` e `render.yaml` para publicar como um único serviço Node no Render, com WebSocket e verificação de saúde. Veja o passo a passo em `GUIA_PUBLICAR.md`. A sala, os jogadores e os pontos ficam na memória do processo; não faça deploy durante uma partida. Não aumente o número de instâncias sem migrar o estado para armazenamento compartilhado.
+O projeto já inclui `package.json` e `render.yaml` para publicar como um único serviço Node no Render, com WebSocket e verificação de saúde. Veja o passo a passo em `GUIA_PUBLICAR.md`. Não aumente o número de instâncias sem coordenar salas ativas entre processos.
 
 O fundo WebGL roda somente na tela inicial de computadores; em telas estreitas e celulares, usa gradientes CSS estáticos. O efeito também pausa quando a aba fica oculta, nas telas internas e quando o sistema pede movimento reduzido. Os arquivos do quiz são servidos pelo mesmo domínio, e a conexão usa WSS automaticamente em HTTPS.
 

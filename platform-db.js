@@ -58,26 +58,7 @@ async function getUser(db, id) {
   const result = await db.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [id] });
   return result.rows[0] || null;
 }
-async function findTarget(db, name, selfId) {
-  const result = await db.execute({ sql: 'SELECT id, display_name FROM users WHERE display_name = ? COLLATE NOCASE AND id <> ? ORDER BY created_at DESC LIMIT 2', args: [name, selfId] });
-  if (result.rows.length > 1) { const error = new Error('Há mais de um visitante com esse apelido. Peça um apelido diferente.'); error.status = 409; throw error; }
-  if (!result.rows.length) { const error = new Error('Não encontramos esse visitante. Confira o apelido e tente novamente.'); error.status = 404; throw error; }
-  return result.rows[0];
-}
-async function snapshot(db, user) {
-  const id = user.id;
-  const [friendRows, messageRows, challengeRows] = await Promise.all([
-    db.execute({ sql: 'SELECT f.requester_id, f.addressee_id, f.status, u.id AS peer_id, u.display_name AS peer_name FROM friendships f JOIN users u ON u.id = CASE WHEN f.requester_id = ? THEN f.addressee_id ELSE f.requester_id END WHERE f.requester_id = ? OR f.addressee_id = ? ORDER BY f.created_at DESC', args: [id, id, id] }),
-    db.execute({ sql: 'SELECT m.sender_id, m.body, sender.display_name AS sender_name, recipient.display_name AS recipient_name FROM direct_messages m JOIN users sender ON sender.id = m.sender_id JOIN users recipient ON recipient.id = m.recipient_id WHERE m.sender_id = ? OR m.recipient_id = ? ORDER BY m.created_at DESC LIMIT 50', args: [id, id] }),
-    db.execute({ sql: 'SELECT c.challenger_id, c.status, challenger.display_name AS challenger_name, challenged.display_name AS challenged_name FROM challenges c JOIN users challenger ON challenger.id = c.challenger_id JOIN users challenged ON challenged.id = c.challenged_id WHERE c.challenger_id = ? OR c.challenged_id = ? ORDER BY c.created_at DESC LIMIT 50', args: [id, id] })
-  ]);
-  return {
-    profile: profile(user),
-    friends: friendRows.rows.map(row => ({ id: row.peer_id, name: row.peer_name, status: row.status === 'accepted' ? 'Amigos' : row.requester_id === id ? 'Convite enviado' : 'Convite recebido' })),
-    messages: messageRows.rows.map(row => ({ from: row.sender_id === id ? 'Você → ' + row.recipient_name : row.sender_name, text: row.body })),
-    challenges: challengeRows.rows.map(row => ({ from: row.challenger_id === id ? 'Você → ' + row.challenged_name : row.challenger_name, status: row.status === 'pending' ? (row.challenger_id === id ? 'Enviado' : 'Recebido') : row.status }))
-  };
-}
+async function snapshot(db, user) { return { profile: profile(user) }; }
 function hashToken(token) { return crypto.createHash('sha256').update(token).digest('hex'); }
 function passwordHash(password, salt) { return new Promise((resolve, reject) => crypto.scrypt(password, salt, 64, (error, key) => error ? reject(error) : resolve(key.toString('hex')))); }
 function requestIp(req) {
@@ -325,23 +306,6 @@ async function handlePlatform(req, res) {
     if (action === 'leaderboard') {
       const result = await db.execute({ sql: 'SELECT display_name, xp FROM users ORDER BY xp DESC, created_at ASC LIMIT 50' });
       return send(res, 200, { rows: result.rows.map(row => ({ name: row.display_name, xp: Number(row.xp), level: Math.floor(Number(row.xp) / 500) + 1 })) });
-    }
-    if (action === 'friend' || action === 'message' || action === 'challenge') {
-      const targetName = cleanName(action === 'friend' ? body.name : body.to);
-      if (targetName.length < 2) return send(res, 400, { error: 'Informe um apelido válido.' });
-      const target = await findTarget(db, targetName, user.id);
-      if (action === 'friend') {
-        await db.execute({ sql: 'INSERT INTO friendships (requester_id, addressee_id, status) VALUES (?, ?, ?)', args: [user.id, target.id, 'pending'] });
-        return send(res, 201, { ok: true });
-      }
-      if (action === 'message') {
-        const message = typeof body.text === 'string' ? body.text.trim().slice(0, 240) : '';
-        if (!message) return send(res, 400, { error: 'Escreva uma mensagem.' });
-        await db.execute({ sql: 'INSERT INTO direct_messages (sender_id, recipient_id, body) VALUES (?, ?, ?)', args: [user.id, target.id, message] });
-        return send(res, 201, { ok: true });
-      }
-      await db.execute({ sql: 'INSERT INTO challenges (challenger_id, challenged_id, status) VALUES (?, ?, ?)', args: [user.id, target.id, 'pending'] });
-      return send(res, 201, { ok: true });
     }
     return send(res, 404, { error: 'Ação não encontrada.' });
   } catch (error) {

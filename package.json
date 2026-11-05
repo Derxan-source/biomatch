@@ -2,14 +2,14 @@
   "name": "biomatch",
   "version": "1.0.0",
   "private": true,
-  "description": "Quiz ao vivo de Biologia com salas por código e WebSocket",
+  "description": "Plataforma educacional gamificada com estudo multidisciplinar e partidas ao vivo",
   "engines": {
-    "node": ">=18 <25"
+    "node": ">=22 <23"
   },
   "scripts": {
     "start": "node server.js",
     "load-test": "node load-test.js",
-    "check": "node --check server.js && node --check platform-db.js && node --check live-store.js && node --check ai-questions.js && node --check app.js && node --check platform.js",
+    "check": "node --check server.js && node --check platform-db.js && node --check live-store.js && node --check app.js && node --check platform.js",
     "test": "npm run check && node test/persistence.test.js"
   },
   "dependencies": {
