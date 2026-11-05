@@ -18,16 +18,34 @@
           <p>Explore matérias, responda desafios e descubra até onde sua curiosidade pode levar você.</p>
           <div class="login-subjects" aria-label="Matérias disponíveis"><span>Biologia</span><span>Química</span><span>História</span><span>Informática</span></div>
         </div>
-        <form class="login-card" id="guest-form">
+        <div class="login-card auth-card">
           <span class="login-card-kicker">BEM-VINDO AO BIOMATCH</span>
-          <h2>Entre para aprender.</h2>
-          <p>Comece como visitante. Seu progresso ficará salvo no seu perfil neste dispositivo.</p>
-          <label class="field-label" for="guest-name">COMO PODEMOS TE CHAMAR?</label>
-          <input id="guest-name" maxlength="18" autocomplete="nickname" placeholder="Digite seu apelido" required>
-          <button class="button button-primary button-full" id="guest-submit" type="submit">Entrar como visitante <span>↗</span></button>
-          <div class="login-divider"><span>PERFIL DE VISITANTE</span></div>
-          <p class="login-note"><span>✳</span> A autenticação com Google será adicionada em uma próxima etapa.</p>
-        </form>
+          <h2 id="auth-heading">Entre para aprender.</h2>
+          <p id="auth-description">Acesse sua conta e continue sua jornada de descobertas.</p>
+          <div class="auth-tabs"><button type="button" class="auth-tab active" data-auth-tab="login">Entrar</button><button type="button" class="auth-tab" data-auth-tab="register">Criar conta</button></div>
+          <form id="auth-form" class="auth-form">
+            <label class="field-label" for="auth-name" id="auth-name-label" hidden>SEU NOME</label>
+            <input id="auth-name" maxlength="18" autocomplete="name" placeholder="Como podemos te chamar?" hidden>
+            <label class="field-label" for="auth-email">E-MAIL</label>
+            <input id="auth-email" type="email" maxlength="254" autocomplete="email" placeholder="voce@exemplo.com" required>
+            <label class="field-label" for="auth-password">SENHA</label>
+            <div class="password-wrap"><input id="auth-password" type="password" minlength="8" maxlength="128" autocomplete="current-password" placeholder="Sua senha" required><button type="button" id="password-toggle" aria-label="Mostrar senha">◉</button></div>
+            <button class="button button-primary button-full" id="auth-submit" type="submit">Entrar na minha conta <span>↗</span></button>
+            <button type="button" class="auth-forgot" id="auth-forgot">Esqueci minha senha</button>
+            <p id="auth-error" class="auth-error" role="alert"></p>
+          </form>
+          <div class="auth-divider"><span>OU</span></div>
+          <button type="button" class="button button-google button-full" disabled aria-disabled="true"><span class="google-mark">G</span> Continuar com Google <small>EM BREVE</small></button>
+          <div class="auth-guest">
+            <span class="auth-guest-title">AINDA NÃO QUER CRIAR UMA CONTA?</span>
+            <form id="guest-form">
+              <label class="field-label" for="guest-name">ESCOLHA UM APELIDO</label>
+              <input id="guest-name" maxlength="18" autocomplete="nickname" placeholder="Digite seu apelido" required>
+              <button class="button button-secondary button-full" id="guest-submit" type="submit">Entrar como visitante <span>↗</span></button>
+            </form>
+            <p class="login-note"><span>✳</span> O visitante também salva o progresso neste dispositivo.</p>
+          </div>
+        </div>
         <div class="login-orbit" aria-hidden="true"><span class="orbit-dot"></span><span class="orbit-core">B</span></div>
       </div>
     </section>
