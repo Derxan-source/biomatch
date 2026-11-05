@@ -5,7 +5,6 @@ const questions=require('./questions.json');
 const generateQuestions=require('./ai-questions');
 const ROOT=__dirname,PORT=Number(process.env.PORT||3000),HOST=process.env.HOST||'0.0.0.0';
 const rooms=new Map(),sessions=new Map(),limits=new Map(),alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const generatedSets=new Map();
 const liveStore=require('./live-store');
 function persistRoom(room){if(!room)return;liveStore.saveRoom(room).catch(error=>console.error('BioMatch live persistence:',error.message))}
 const platformProfiles=new Map(),platformFriends=new Map(),platformMessages=new Map(),platformChallenges=new Map();
@@ -85,7 +84,7 @@ async function handle(ws,raw){if(raw.length>5000)return fail(ws,'Mensagem muito 
   if(m.type==='remove_player'){const room=ws.room,player=room?.players.get(String(m.playerId||''));if(!room||ws.player?.id!==room.host)return fail(ws,'Somente o anfitrião pode remover participantes.');if(!player||player.id===room.host)return fail(ws,'Esse participante não pode ser removido.');const target=player.ws;if(target?.open)send(target,{type:'player_removed',message:'O anfitrião removeu você da sala.'});removePlayer(room,player);if(target){target.player=null;target.room=null;target.end()}return}
   if(m.type==='leave_room'){if(ws.player)removePlayer(ws.room,ws.player);ws.room=null;ws.player=null;return}
 }
-server.on('upgrade',(req,socket)=>{const key=req.headers['sec-websocket-key'];if(req.url!=='/ws'||!key||req.headers.upgrade?.toLowerCase()!=='websocket'){socket.destroy();return}const accept=crypto.createHash('sha1').update(key+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+'\r\n\r\n');socket.open=true;readFrames(socket,raw=>handle(socket,raw));socket.on('close',()=>{socket.open=false;const p=socket.player;if(!p||p.ws!==socket)return;p.ws=null;p.expire=setTimeout(()=>removePlayer(socket.room,p),DISCONNECT_GRACE_MS);if(socket.room){checkComplete(socket.room);broadcastState(socket.room)}})});
+server.on('upgrade',(req,socket)=>{const key=req.headers['sec-websocket-key'];if(req.url!=='/ws'||!key||req.headers.upgrade?.toLowerCase()!=='websocket'){socket.destroy();return}const accept=crypto.createHash('sha1').update(key+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+'\r\n\r\n');socket.open=true;readFrames(socket,raw=>{handle(socket,raw).catch(error=>{console.error('BioMatch live action:',error.message);fail(socket,'Não foi possível salvar o estado da partida. Tente novamente.','PERSISTENCE_ERROR')})});socket.on('close',()=>{socket.open=false;const p=socket.player;if(!p||p.ws!==socket)return;p.ws=null;p.expire=setTimeout(()=>removePlayer(socket.room,p),DISCONNECT_GRACE_MS);if(socket.room){checkComplete(socket.room);broadcastState(socket.room)}})});
 setInterval(()=>{for(const[k,v]of limits)if(!v.length)limits.delete(k)},60000).unref();
 async function restoreLiveRooms(){
  try{
