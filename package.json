@@ -8,7 +8,9 @@
   },
   "scripts": {
     "start": "node server.js",
-    "load-test": "node load-test.js"
+    "load-test": "node load-test.js",
+    "check": "node --check server.js && node --check platform-db.js && node --check live-store.js && node --check ai-questions.js",
+    "test": "npm run check"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0"
