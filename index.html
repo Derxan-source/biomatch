@@ -5,16 +5,36 @@
   <meta name="theme-color" content="#0b1413"><meta name="description" content="BioMatch — um quiz de Biologia ao vivo, para jogar em turma.">
   <title>BioMatch — laboratório de ideias</title><link rel="stylesheet" href="styles.css">
 </head>
-<body data-view="home">
+<body data-view="login">
   <div class="bio-ambient" aria-hidden="true"><canvas id="ambient-canvas"></canvas></div>
   <div class="grain" aria-hidden="true"></div>
-  <header class="topbar"><a class="brand" href="#inicio" aria-label="BioMatch início"><span class="brand-mark"><i></i><i></i><i></i><i></i></span><span>bio<span class="brand-light">match</span><small>LABORATÓRIO DE IDEIAS</small></span></a><div class="top-right"><span class="live-pill"><b></b> aprendizagem em rede</span><button class="icon-button" id="rules-open" aria-label="Abrir regras">?</button></div></header>
+  <header class="topbar"><a class="brand" href="#inicio" aria-label="BioMatch início"><span class="brand-mark"><i></i><i></i><i></i><i></i></span><span>bio<span class="brand-light">match</span><small>LABORATÓRIO DE IDEIAS</small></span></a><div class="top-right"><span class="live-pill"><b></b> aprendizagem em rede</span><span class="account-chip hidden" id="account-chip"></span><button class="text-button logout-button hidden" id="logout-button" type="button">Sair ↗</button><button class="icon-button" id="rules-open" aria-label="Abrir regras">?</button></div></header>
   <main>
-    <button id="ai-open" type="button" hidden aria-hidden="true" tabindex="-1"></button>
-    <section class="screen active" id="home-screen">
+    <section class="screen active" id="login-screen">
+      <div class="login-layout">
+        <div class="login-copy">
+          <div class="eyebrow"><span class="eyebrow-line"></span> UM UNIVERSO DE DESCOBERTAS</div>
+          <h1>Aprender pode<br><em>ser uma aventura.</em></h1>
+          <p>Explore matérias, responda desafios e descubra até onde sua curiosidade pode levar você.</p>
+          <div class="login-subjects" aria-label="Matérias disponíveis"><span>Biologia</span><span>Química</span><span>História</span><span>Informática</span></div>
+        </div>
+        <form class="login-card" id="guest-form">
+          <span class="login-card-kicker">BEM-VINDO AO BIOMATCH</span>
+          <h2>Entre para aprender.</h2>
+          <p>Comece como visitante. Seu progresso ficará disponível somente nesta sessão.</p>
+          <label class="field-label" for="guest-name">COMO PODEMOS TE CHAMAR?</label>
+          <input id="guest-name" maxlength="18" autocomplete="nickname" placeholder="Digite seu apelido" required>
+          <button class="button button-primary button-full" id="guest-submit" type="submit">Entrar como visitante <span>↗</span></button>
+          <div class="login-divider"><span>ACESSO TEMPORÁRIO</span></div>
+          <p class="login-note"><span>✳</span> A autenticação com Google será adicionada em uma próxima etapa.</p>
+        </form>
+        <div class="login-orbit" aria-hidden="true"><span class="orbit-dot"></span><span class="orbit-core">B</span></div>
+      </div>
+    </section>
+    <section class="screen" id="home-screen">
       <div class="dash-topline">
         <div><div class="eyebrow"><span class="eyebrow-line"></span> SUA CENTRAL DE APRENDIZADO</div><h1 class="dash-title">Dashboard</h1></div>
-        <div class="dash-user"><span class="dash-xp-dot"></span><strong>BioMatch</strong><span class="dash-user-label">Aprenda no seu ritmo</span></div>
+        <div class="dash-user"><span class="dash-xp-dot"></span><strong id="dashboard-greeting">Visitante</strong><span class="dash-user-label">Sessão temporária</span></div>
       </div>
       <section class="dash-hero-grid" aria-label="Destaques">
         <article class="dash-feature dash-feature-bio"><div><span class="dash-kicker">CONTINUE DE ONDE PAROU</span><h2>Biologia</h2><p>Explore células, genética e os sistemas da vida.</p><button class="dash-text-button" id="classic-open">Continuar estudando <span>↗</span></button></div><span class="dash-feature-symbol">⌬</span></article>
