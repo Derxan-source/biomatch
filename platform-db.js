@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { createClient } = require('@libsql/client');
+const { verifyIdToken } = require('./firebase-auth');
 const questionBank = require('./question-banks.json');
 let client;
 let initialization;
@@ -57,101 +58,27 @@ async function getUser(db, id) {
   return result.rows[0] || null;
 }
 async function snapshot(db, user) { return { profile: profile(user) }; }
-function hashToken(token) { return crypto.createHash('sha256').update(token).digest('hex'); }
-function passwordHash(password, salt) { return new Promise((resolve, reject) => crypto.scrypt(password, salt, 64, (error, key) => error ? reject(error) : resolve(key.toString('hex')))); }
-function requestIp(req) {
-  const forwarded = String(req.headers?.['x-forwarded-for'] || '').split(',').map(value => value.trim()).filter(Boolean).at(-1);
-  return forwarded || req.socket?.remoteAddress || 'unknown';
-}
-async function authRateLimited(db, key, max, windowMs) {
-  const now = Date.now(), keyHash = hashToken(key), start = now - windowMs;
-  const result = await db.execute({
-    sql: `INSERT INTO auth_rate_limits (key_hash, window_start, hit_count) VALUES (?, ?, 1)
-      ON CONFLICT(key_hash) DO UPDATE SET
-        hit_count = CASE WHEN auth_rate_limits.window_start <= ? THEN 1 ELSE auth_rate_limits.hit_count + 1 END,
-        window_start = CASE WHEN auth_rate_limits.window_start <= ? THEN ? ELSE auth_rate_limits.window_start END
-      RETURNING hit_count`,
-    args: [keyHash, now, start, start, now]
-  });
-  return Number(result.rows[0]?.hit_count || 0) > max;
-}
-function validEmail(value) { return typeof value === 'string' && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
-function appBaseUrl() {
-  const value = process.env.APP_BASE_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000');
-  if (!value) throw new Error('APP_BASE_URL não configurada.');
-  const url = new URL(value);
-  if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') throw new Error('APP_BASE_URL precisa usar HTTPS em produção.');
-  return url.origin;
-}
-async function sendPasswordReset(email, token) {
-  const apiKey = process.env.RESEND_API_KEY, from = process.env.RESEND_FROM_EMAIL;
-  if (!apiKey || !from) throw new Error('Resend não está configurado no servidor.');
-  const url = new URL('/', appBaseUrl()); url.searchParams.set('reset', token);
-  const response = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + apiKey, 'content-type': 'application/json' }, body: JSON.stringify({ from, to: [email], subject: 'Redefina sua senha do BioMatch', text: `Recebemos uma solicitação para redefinir a senha da sua conta BioMatch. Acesse este link em até 30 minutos e use-o uma única vez:\n\n${url.href}\n\nSe você não pediu essa alteração, ignore este e-mail.` }) });
-  if (!response.ok) throw new Error('Resend recusou o envio do e-mail de recuperação.');
-}
 async function handleAuth(req, res) {
   try {
     if (req.method !== 'POST') return send(res, 405, { error: 'Método não permitido.' });
-    const body = await readBody(req), db = await database(), action = body.action;
-    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-    if (['register', 'login', 'request_password_reset'].includes(action) && await authRateLimited(db, action + ':ip:' + requestIp(req), action === 'login' ? 20 : 8, 15 * 60 * 1000)) return send(res, 429, { error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' });
-    if (action === 'register') {
-      const name = cleanName(body.name), password = typeof body.password === 'string' ? body.password : '';
-      if (name.length < 2) return send(res, 400, { error: 'Informe um nome com pelo menos 2 caracteres.' });
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return send(res, 400, { error: 'Informe um e-mail válido.' });
-      if (password.length < 8 || password.length > 128) return send(res, 400, { error: 'A senha precisa ter entre 8 e 128 caracteres.' });
-      const exists = await db.execute({ sql: 'SELECT id FROM users WHERE email = ? COLLATE NOCASE', args: [email] });
-      if (exists.rows.length) return send(res, 409, { error: 'Este e-mail já possui uma conta. Entre ou use outro e-mail.' });
-      const salt = crypto.randomBytes(16).toString('hex'), digest = await passwordHash(password, salt), id = crypto.randomUUID(), token = crypto.randomBytes(32).toString('base64url');
-      await db.execute({ sql: 'INSERT INTO users (id, display_name, email, password_hash) VALUES (?, ?, ?, ?)', args: [id, name, email, salt + ':' + digest] });
-      await db.execute({ sql: 'INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', args: [hashToken(token), id, Date.now() + 30 * 24 * 60 * 60 * 1000] });
-      return send(res, 201, { token, user: profile(await getUser(db, id)) });
-    }
-    if (action === 'login') {
-      const password = typeof body.password === 'string' ? body.password : '';
-      const result = await db.execute({ sql: 'SELECT * FROM users WHERE email = ? COLLATE NOCASE', args: [email] }), user = result.rows[0], stored = user && user.password_hash;
-      if (!stored || !stored.includes(':')) return send(res, 401, { error: 'E-mail ou senha incorretos.' });
-      const [salt, expected] = stored.split(':'), actual = await passwordHash(password, salt);
-      if (!crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(expected, 'hex'))) return send(res, 401, { error: 'E-mail ou senha incorretos.' });
-      const token = crypto.randomBytes(32).toString('base64url');
-      await db.execute({ sql: 'INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', args: [hashToken(token), user.id, Date.now() + 30 * 24 * 60 * 60 * 1000] });
-      return send(res, 200, { token, user: profile(user) });
-    }
-    if (action === 'logout') {
-      const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-      if (token) await db.execute({ sql: 'DELETE FROM auth_sessions WHERE token_hash = ?', args: [hashToken(token)] });
-      return send(res, 200, { ok: true });
-    }
-    if (action === 'request_password_reset') {
-      const generic = { ok: true, message: 'Se houver uma conta para esse e-mail, enviaremos as instruções de recuperação.' };
-      if (!validEmail(email)) return send(res, 200, generic);
-      if (await authRateLimited(db, 'password-reset:email:' + email, 3, 60 * 60 * 1000)) return send(res, 200, generic);
-      const result = await db.execute({ sql: 'SELECT id, email FROM users WHERE email = ? COLLATE NOCASE', args: [email] }), user = result.rows[0];
-      if (user) {
-        const token = crypto.randomBytes(32).toString('base64url');
-        await db.execute({ sql: 'DELETE FROM password_reset_tokens WHERE user_id = ?', args: [user.id] });
-        await db.execute({ sql: 'INSERT INTO password_reset_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)', args: [hashToken(token), user.id, Date.now() + 30 * 60 * 1000] });
-        try { await sendPasswordReset(user.email, token); }
-        catch (error) { console.error('BioMatch password reset email:', error.message); }
+    const body = await readBody(req), action = body.action;
+    if (action === 'logout') return send(res, 200, { ok: true });
+    if (action === 'sync') {
+      const db = await database();
+      const bearer = String(req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
+      const decoded = bearer && await verifyIdToken(bearer[1]);
+      if (!decoded?.uid || !decoded.email) return send(res, 401, { error: 'Sua sessão expirou. Entre novamente.' });
+      const id = decoded.uid, email = decoded.email.trim().toLowerCase(), name = cleanName(body.name) || cleanName(decoded.name) || 'Estudante';
+      const existing = await getUser(db, id);
+      if (existing && existing.email && existing.email.toLowerCase() !== email) return send(res, 409, { error: 'A conta autenticada não corresponde ao perfil existente.' });
+      if (!existing) {
+        const emailOwner = await db.execute({ sql: 'SELECT id FROM users WHERE email = ? COLLATE NOCASE', args: [email] });
+        if (emailOwner.rows.length) return send(res, 409, { error: 'Este e-mail está associado a uma conta antiga ainda não migrada.' });
+        await db.execute({ sql: 'INSERT INTO users (id, display_name, email, password_hash) VALUES (?, ?, ?, NULL)', args: [id, name, email] });
+      } else if (!existing.email) {
+        await db.execute({ sql: 'UPDATE users SET email = ? WHERE id = ?', args: [email, id] });
       }
-      return send(res, 200, generic);
-    }
-    if (action === 'reset_password') {
-      const token = typeof body.token === 'string' ? body.token : '', password = typeof body.password === 'string' ? body.password : '';
-      if (password.length < 8 || password.length > 128) return send(res, 400, { error: 'A senha precisa ter entre 8 e 128 caracteres.' });
-      if (token.length < 32 || token.length > 100) return send(res, 400, { error: 'Este link de redefinição é inválido ou expirou.' });
-      const salt = crypto.randomBytes(16).toString('hex'), digest = await passwordHash(password, salt), tx = await db.transaction('write');
-      try {
-        const found = await tx.execute({ sql: 'SELECT user_id FROM password_reset_tokens WHERE token_hash = ? AND expires_at > ?', args: [hashToken(token), Date.now()] });
-        const reset = found.rows[0];
-        if (!reset) { await tx.rollback(); return send(res, 400, { error: 'Este link de redefinição é inválido ou expirou.' }); }
-        await tx.execute({ sql: 'UPDATE users SET password_hash = ? WHERE id = ?', args: [salt + ':' + digest, reset.user_id] });
-        await tx.execute({ sql: 'DELETE FROM password_reset_tokens WHERE user_id = ?', args: [reset.user_id] });
-        await tx.execute({ sql: 'DELETE FROM auth_sessions WHERE user_id = ?', args: [reset.user_id] });
-        await tx.commit();
-        return send(res, 200, { ok: true });
-      } catch (error) { try { await tx.rollback(); } catch {} throw error; }
+      return send(res, 200, { user: profile(await getUser(db, id)) });
     }
     return send(res, 404, { error: 'Ação de autenticação não encontrada.' });
   } catch (error) {
@@ -178,8 +105,8 @@ async function handlePlatform(req, res) {
     const bearer = String(req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
     let user = null;
     if (bearer) {
-      const auth = await db.execute({ sql: 'SELECT u.* FROM auth_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?', args: [hashToken(bearer[1]), Date.now()] });
-      user = auth.rows[0] || null;
+      const decoded = await verifyIdToken(bearer[1]);
+      user = decoded?.uid ? await getUser(db, decoded.uid) : null;
     } else user = await getUser(db, guestId);
     if (!user) return send(res, 401, { error: 'Perfil visitante não encontrado. Entre novamente ou verifique os dados salvos neste dispositivo.' });
     if (action === 'snapshot') return send(res, 200, await snapshot(db, user));

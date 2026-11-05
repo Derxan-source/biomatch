@@ -35,20 +35,12 @@
             <p id="auth-error" class="auth-error" role="alert"></p>
           </form>
           <form id="password-request-form" class="auth-form" hidden>
-            <p>Informe seu e-mail. Se houver uma conta, enviaremos um link válido por 30 minutos.</p>
+            <p>Informe seu e-mail. O Firebase enviará as instruções para redefinir sua senha.</p>
             <label class="field-label" for="reset-email">E-MAIL</label>
             <input id="reset-email" type="email" maxlength="254" autocomplete="email" required>
             <button class="button button-primary button-full" type="submit">Enviar instruções <span>↗</span></button>
             <button type="button" class="auth-forgot" id="reset-request-back">Voltar para entrar</button>
             <p id="reset-request-message" class="auth-error" role="status"></p>
-          </form>
-          <form id="password-reset-form" class="auth-form" hidden>
-            <p>Escolha uma senha nova para sua conta BioMatch.</p>
-            <label class="field-label" for="reset-password">NOVA SENHA</label>
-            <input id="reset-password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
-            <button class="button button-primary button-full" type="submit">Redefinir senha <span>↗</span></button>
-            <button type="button" class="auth-forgot" id="password-reset-back">Voltar para entrar</button>
-            <p id="password-reset-message" class="auth-error" role="alert"></p>
           </form>
           <div class="auth-divider"><span>OU</span></div>
           <div class="auth-guest">

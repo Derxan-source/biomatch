@@ -8,11 +8,13 @@
   },
   "scripts": {
     "start": "node server.js",
+    "migrate:firebase-auth": "node scripts/migrate-firebase-auth.js",
     "load-test": "node load-test.js",
-    "check": "node --check server.js && node --check platform-db.js && node --check live-store.js && node --check app.js && node --check platform.js",
+    "check": "node --check server.js && node --check platform-db.js && node --check firebase-auth.js && node --check scripts/migrate-firebase-auth.js && node --check live-store.js && node --check app.js && node --check platform.js",
     "test": "npm run check && node test/persistence.test.js"
   },
   "dependencies": {
-    "@libsql/client": "^0.18.0"
+    "@libsql/client": "^0.18.0",
+    "firebase-admin": "^13.5.0"
   }
 }

@@ -1,7 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
 
 process.env.NODE_ENV = 'test';
@@ -10,6 +9,7 @@ delete process.env.TURSO_DATABASE_URL;
 delete process.env.TURSO_AUTH_TOKEN;
 
 const { handlePlatform, handleAuth, getDatabase } = require('../platform-db');
+require('../firebase-auth').setAuthForTests({ verifyIdToken: async token => token === 'valid-firebase-token' ? { uid: 'firebase-user-1', email: 'conta@biomatch.test', name: 'Conta Firebase' } : null });
 const liveStore = require('../live-store');
 const questionBank = require('../question-banks.json');
 assert.doesNotMatch(fs.readFileSync('./index.html', 'utf8'), /Continuar com Google|href=["']\/auth\/google/);
@@ -47,49 +47,20 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     try { fs.rmSync('./biomatch.test.db' + suffix); } catch {}
   }
   try {
-    const account = await auth({ action: 'register', name: 'Conta Teste', email: 'conta@biomatch.test', password: 'senha-forte-123' });
-    assert.equal(account.status, 201);
-    assert.ok(account.data.token);
-    const accountSnapshot = await api('GET', 'snapshot', {}, '', account.data.token);
+    const account = await auth({ action: 'sync', name: 'Conta Firebase' }, 'valid-firebase-token');
+    assert.equal(account.status, 200);
+    assert.equal(account.data.user.name, 'Conta Firebase');
+    const accountSnapshot = await api('GET', 'snapshot', {}, '', 'valid-firebase-token');
     assert.equal(accountSnapshot.status, 200);
-    assert.equal(accountSnapshot.data.profile.name, 'Conta Teste');
-    const login = await auth({ action: 'login', email: 'CONTA@BIOMATCH.TEST', password: 'senha-forte-123' });
-    assert.equal(login.status, 200);
-    const invalidLogin = await auth({ action: 'login', email: 'conta@biomatch.test', password: 'senha-errada' });
-    assert.equal(invalidLogin.status, 401);
-
-    const sentEmails = [];
-    process.env.APP_BASE_URL = 'http://localhost:3000';
-    process.env.RESEND_API_KEY = 'test-resend-key';
-    process.env.RESEND_FROM_EMAIL = 'BioMatch <noreply@example.test>';
-    global.fetch = async (url, options) => { sentEmails.push({ url: String(url), body: JSON.parse(options.body) }); return { ok: true, json: async () => ({ id: 'email-test' }) }; };
-    const resetRequest = await auth({ action: 'request_password_reset', email: 'conta@biomatch.test' }, '', '198.51.100.11');
-    assert.equal(resetRequest.status, 200);
-    assert.match(resetRequest.data.message, /Se houver uma conta/);
-    assert.equal(sentEmails.length, 1);
-    const resetLink = new URL(sentEmails[0].body.text.match(/http:\/\/localhost:3000\/\?reset=[^\s]+/)[0]);
-    const resetToken = resetLink.searchParams.get('reset');
+    assert.equal(accountSnapshot.data.profile.name, 'Conta Firebase');
+    assert.equal((await auth({ action: 'sync', name: 'Falsificado' }, 'invalid-token')).status, 401);
+    assert.equal((await api('GET', 'snapshot', {}, '', 'invalid-token')).status, 401);
     const db = await getDatabase();
-    const storedReset = await db.execute({ sql: 'SELECT token_hash, expires_at FROM password_reset_tokens WHERE user_id = (SELECT id FROM users WHERE email = ?)', args: ['conta@biomatch.test'] });
-    assert.equal(storedReset.rows.length, 1);
-    assert.equal(storedReset.rows[0].token_hash, crypto.createHash('sha256').update(resetToken).digest('hex'));
-    assert.ok(Number(storedReset.rows[0].expires_at) > Date.now());
-    assert.ok(Number(storedReset.rows[0].expires_at) <= Date.now() + 30 * 60 * 1000);
-    assert.notEqual(storedReset.rows[0].token_hash, resetToken);
-    const unknownReset = await auth({ action: 'request_password_reset', email: 'ausente@biomatch.test' }, '', '198.51.100.12');
-    assert.deepEqual(unknownReset, resetRequest);
-    assert.equal(sentEmails.length, 1);
-    for (let attempt = 0; attempt < 8; attempt++) {
-      const limited = await auth({ action: 'request_password_reset', email: `limit-${attempt}@biomatch.test` }, '', '198.51.100.55');
-      assert.equal(limited.status, 200);
-    }
-    assert.equal((await auth({ action: 'request_password_reset', email: 'limit-last@biomatch.test' }, '', '198.51.100.55')).status, 429);
-    const changedPassword = await auth({ action: 'reset_password', token: resetToken, password: 'senha-nova-456' });
-    assert.equal(changedPassword.status, 200);
-    assert.equal((await api('GET', 'snapshot', {}, '', account.data.token)).status, 401);
-    assert.equal((await api('GET', 'snapshot', {}, '', login.data.token)).status, 401);
-    assert.equal((await auth({ action: 'reset_password', token: resetToken, password: 'senha-nova-789' })).status, 400);
-    assert.equal((await auth({ action: 'login', email: 'conta@biomatch.test', password: 'senha-nova-456' })).status, 200);
+    const firebaseProfile = await db.execute({ sql: 'SELECT id, email, password_hash FROM users WHERE id = ?', args: ['firebase-user-1'] });
+    assert.equal(firebaseProfile.rows.length, 1);
+    assert.equal(firebaseProfile.rows[0].email, 'conta@biomatch.test');
+    assert.equal(firebaseProfile.rows[0].password_hash, null);
+    assert.equal((await auth({ action: 'register', email: 'x', password: 'x' })).status, 404);
     assert.equal((await auth({ action: 'oauth_exchange', code: 'retired-google-login' })).status, 404);
     const guest = await api('POST', 'guest', { name: 'Teste Turso' });
     assert.equal(guest.status, 201);
@@ -141,7 +112,7 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     await liveStore.deleteRoom(room.code);
 
     await db.close();
-    console.log('Persistence tests passed: email/password authentication, password reset expiry/hash/use-once/session revocation, guests, progress, duplicate protection, leaderboard and live persistence.');
+    console.log('Persistence tests passed: Firebase token sync and verification, guests, progress, duplicate protection, leaderboard and live persistence.');
   } catch (error) {
     console.error(error);
     process.exitCode = 1;
