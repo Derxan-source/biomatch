@@ -87,7 +87,7 @@ async function handlePlatform(req, res) {
       return send(res, 201, { guestId: id, profile: profile(await getUser(db, id)) });
     }
     const user = await getUser(db, guestId);
-    if (!user) return send(res, 401, { error: 'Sua sessão temporária não foi encontrada. Entre novamente como visitante.' });
+    if (!user) return send(res, 401, { error: 'Perfil visitante não encontrado. Entre novamente ou verifique os dados salvos neste dispositivo.' });
     if (action === 'snapshot') return send(res, 200, await snapshot(db, user));
     if (action === 'questions') {
       const subject = String(req.method === 'GET' ? url.searchParams.get('subject') : body.subject || '');
