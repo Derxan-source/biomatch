@@ -59,3 +59,16 @@ CREATE TABLE IF NOT EXISTS live_state (
   state_json TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS live_rooms (
+  code TEXT PRIMARY KEY,
+  state_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS live_question_sets (
+  token TEXT PRIMARY KEY,
+  state_json TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_live_question_sets_expiry ON live_question_sets(expires_at);
