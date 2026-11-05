@@ -9,7 +9,7 @@ const generatedSets=new Map();
 const platformProfiles=new Map(),platformFriends=new Map(),platformMessages=new Map(),platformChallenges=new Map();
 let platformQuestionBank=[];try{platformQuestionBank=require('./question-banks.json')}catch{}
 function platformName(v){return typeof v==='string'?v.replace(/[<>\u0000-\u001f]/g,'').trim().replace(/\s+/g,' ').slice(0,18):''}
-function platformProfile(p){return {id:p.id,name:p.name,xp:p.xp,level:Math.floor(p.xp/500)+1,answers:p.answers,correct:p.correct,streak:p.streak,badges:p.badges}}
+function platformProfile(p){return {id:p.id,name:p.name,xp:p.xp,level:Math.floor(p.xp/500)+1,answers:p.answers,correct:p.correct,streak:p.streak,badges:p.badges,dailyAnswers:p.dailyAnswers||0,subjectStats:p.subjectStats||{}}}
 function platformFind(guestId){return typeof guestId==='string'?platformProfiles.get(guestId):null}
 function platformReply(res,status,data){return jsonApi(res,status,data)}
 async function handlePlatform(req,res){
