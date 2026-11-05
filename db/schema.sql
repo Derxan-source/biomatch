@@ -4,6 +4,8 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   display_name TEXT NOT NULL CHECK(length(display_name) BETWEEN 2 AND 18),
+  email TEXT,
+  password_hash TEXT,
   xp INTEGER NOT NULL DEFAULT 0 CHECK(xp >= 0),
   answers INTEGER NOT NULL DEFAULT 0 CHECK(answers >= 0),
   correct INTEGER NOT NULL DEFAULT 0 CHECK(correct >= 0 AND correct <= answers),
@@ -68,3 +70,12 @@ CREATE TABLE IF NOT EXISTS live_question_sets (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_live_question_sets_expiry ON live_question_sets(expires_at);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+ token_hash TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ expires_at INTEGER NOT NULL,
+ created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at);
