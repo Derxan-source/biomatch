@@ -23,9 +23,7 @@ async function database() {
       const names = new Set(columns.rows.map(row => row.name));
       if (!names.has('email')) await client.execute('ALTER TABLE users ADD COLUMN email TEXT');
       if (!names.has('password_hash')) await client.execute('ALTER TABLE users ADD COLUMN password_hash TEXT');
-      if (!names.has('google_sub')) await client.execute('ALTER TABLE users ADD COLUMN google_sub TEXT');
       await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email COLLATE NOCASE) WHERE email IS NOT NULL');
-      await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL');
       return client;
     })().catch(error => { initialization = null; throw error; });
   }
@@ -85,73 +83,6 @@ function appBaseUrl() {
   if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') throw new Error('APP_BASE_URL precisa usar HTTPS em produção.');
   return url.origin;
 }
-function googleConfig() {
-  const clientId = process.env.GOOGLE_CLIENT_ID || '707380459534-7kte22tun22b9h18c296kfsiued2v0nh.apps.googleusercontent.com';
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || new URL('/auth/google/callback', appBaseUrl()).href;
-  if (!clientSecret) throw new Error('Google OAuth não configurado no servidor.');
-  return { clientId, clientSecret, redirectUri };
-}
-function redirect(res, url) { res.writeHead(302, { location: url, 'cache-control': 'no-store' }); res.end(); }
-async function handleGoogleStart(req, res) {
-  try {
-    const db = await database();
-    if (await authRateLimited(db, 'oauth-start:' + requestIp(req), 10, 15 * 60 * 1000)) return send(res, 429, { error: 'Muitas tentativas. Aguarde alguns minutos.' });
-    const { clientId, redirectUri } = googleConfig();
-    const state = crypto.randomBytes(32).toString('base64url'), verifier = crypto.randomBytes(48).toString('base64url');
-    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
-    await db.execute({ sql: 'INSERT INTO auth_oauth_states (state_hash, verifier, expires_at) VALUES (?, ?, ?)', args: [hashToken(state), verifier, Date.now() + 10 * 60 * 1000] });
-    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    for (const [key, value] of Object.entries({ client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope: 'openid email profile', state, code_challenge: challenge, code_challenge_method: 'S256', prompt: 'select_account' })) url.searchParams.set(key, value);
-    return redirect(res, url.href);
-  } catch (error) {
-    console.error('BioMatch Google OAuth start:', error.message);
-    return send(res, 503, { error: 'O login com Google não está configurado.' });
-  }
-}
-async function handleGoogleCallback(req, res) {
-  const base = (() => { try { return appBaseUrl(); } catch { return 'https://biomatch-oyxn.onrender.com'; } })();
-  const fail = () => redirect(res, base + '/?oauth_error=1');
-  try {
-    const params = new URL(req.url, base).searchParams, state = params.get('state'), code = params.get('code');
-    if (!state || !code || params.has('error')) return fail();
-    const db = await database(), stateHash = hashToken(state), tx = await db.transaction('write');
-    let saved;
-    try {
-      const row = await tx.execute({ sql: 'SELECT verifier, expires_at FROM auth_oauth_states WHERE state_hash = ?', args: [stateHash] });
-      saved = row.rows[0];
-      await tx.execute({ sql: 'DELETE FROM auth_oauth_states WHERE state_hash = ?', args: [stateHash] });
-      await tx.commit();
-    } catch (error) { try { await tx.rollback(); } catch {} throw error; }
-    if (!saved || Number(saved.expires_at) < Date.now()) return fail();
-    const { clientId, clientSecret, redirectUri } = googleConfig();
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code', code_verifier: saved.verifier }) });
-    if (!tokenResponse.ok) return fail();
-    const tokenData = await tokenResponse.json();
-    if (typeof tokenData.id_token !== 'string') return fail();
-    const verifyResponse = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(tokenData.id_token));
-    if (!verifyResponse.ok) return fail();
-    const identity = await verifyResponse.json();
-    if (identity.aud !== clientId || !['accounts.google.com', 'https://accounts.google.com'].includes(identity.iss) || Number(identity.exp) * 1000 <= Date.now() || identity.email_verified !== 'true' || !validEmail(identity.email) || !identity.sub) return fail();
-    let userResult = await db.execute({ sql: 'SELECT * FROM users WHERE google_sub = ?', args: [identity.sub] });
-    let user = userResult.rows[0];
-    if (!user) {
-      userResult = await db.execute({ sql: 'SELECT * FROM users WHERE email = ? COLLATE NOCASE', args: [identity.email.toLowerCase()] });
-      user = userResult.rows[0];
-      if (user) await db.execute({ sql: 'UPDATE users SET google_sub = ? WHERE id = ?', args: [identity.sub, user.id] });
-      else {
-        let name = cleanName(identity.name || identity.given_name || identity.email.split('@')[0]);
-        if (name.length < 2) name = 'Estudante';
-        const id = crypto.randomUUID();
-        await db.execute({ sql: 'INSERT INTO users (id, display_name, email, google_sub) VALUES (?, ?, ?, ?)', args: [id, name, identity.email.toLowerCase(), identity.sub] });
-        user = await getUser(db, id);
-      }
-    }
-    const exchange = crypto.randomBytes(32).toString('base64url');
-    await db.execute({ sql: 'INSERT INTO auth_oauth_exchanges (code_hash, user_id, expires_at) VALUES (?, ?, ?)', args: [hashToken(exchange), user.id, Date.now() + 60 * 1000] });
-    return redirect(res, base + '/?oauth_code=' + encodeURIComponent(exchange));
-  } catch (error) { console.error('BioMatch Google OAuth callback:', error.message); return fail(); }
-}
 async function sendPasswordReset(email, token) {
   const apiKey = process.env.RESEND_API_KEY, from = process.env.RESEND_FROM_EMAIL;
   if (!apiKey || !from) throw new Error('Resend não está configurado no servidor.');
@@ -191,21 +122,6 @@ async function handleAuth(req, res) {
       const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
       if (token) await db.execute({ sql: 'DELETE FROM auth_sessions WHERE token_hash = ?', args: [hashToken(token)] });
       return send(res, 200, { ok: true });
-    }
-    if (action === 'oauth_exchange') {
-      const code = typeof body.code === 'string' ? body.code : '';
-      if (!code || code.length > 100) return send(res, 400, { error: 'Código de autenticação inválido.' });
-      const tx = await db.transaction('write');
-      try {
-        const result = await tx.execute({ sql: 'SELECT user_id, expires_at FROM auth_oauth_exchanges WHERE code_hash = ?', args: [hashToken(code)] });
-        const exchange = result.rows[0];
-        await tx.execute({ sql: 'DELETE FROM auth_oauth_exchanges WHERE code_hash = ?', args: [hashToken(code)] });
-        if (!exchange || Number(exchange.expires_at) < Date.now()) { await tx.commit(); return send(res, 401, { error: 'A sessão do Google expirou. Tente novamente.' }); }
-        const token = crypto.randomBytes(32).toString('base64url');
-        await tx.execute({ sql: 'INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', args: [hashToken(token), exchange.user_id, Date.now() + 30 * 24 * 60 * 60 * 1000] });
-        await tx.commit();
-        return send(res, 200, { token, user: profile(await getUser(db, exchange.user_id)) });
-      } catch (error) { try { await tx.rollback(); } catch {} throw error; }
     }
     if (action === 'request_password_reset') {
       const generic = { ok: true, message: 'Se houver uma conta para esse e-mail, enviaremos as instruções de recuperação.' };
@@ -317,4 +233,4 @@ async function handlePlatform(req, res) {
   }
 }
 async function getDatabase() { return database(); }
-module.exports = { handlePlatform, handleAuth, handleGoogleStart, handleGoogleCallback, getDatabase };
+module.exports = { handlePlatform, handleAuth, getDatabase };

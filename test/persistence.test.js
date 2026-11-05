@@ -12,6 +12,8 @@ delete process.env.TURSO_AUTH_TOKEN;
 const { handlePlatform, handleAuth, getDatabase } = require('../platform-db');
 const liveStore = require('../live-store');
 const questionBank = require('../question-banks.json');
+assert.doesNotMatch(fs.readFileSync('./index.html', 'utf8'), /Continuar com Google|href=["']\/auth\/google/);
+assert.doesNotMatch(fs.readFileSync('./server.js', 'utf8'), /\/auth\/google/);
 
 function request(method, url, body, ip = '127.0.0.1') {
   const req = Readable.from(method === 'POST' ? [JSON.stringify(body || {})] : []);
@@ -56,8 +58,6 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     const invalidLogin = await auth({ action: 'login', email: 'conta@biomatch.test', password: 'senha-errada' });
     assert.equal(invalidLogin.status, 401);
 
-    const originalFetch = global.fetch;
-    const originalEnv = { ...process.env };
     const sentEmails = [];
     process.env.APP_BASE_URL = 'http://localhost:3000';
     process.env.RESEND_API_KEY = 'test-resend-key';
@@ -90,32 +90,7 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     assert.equal((await api('GET', 'snapshot', {}, '', login.data.token)).status, 401);
     assert.equal((await auth({ action: 'reset_password', token: resetToken, password: 'senha-nova-789' })).status, 400);
     assert.equal((await auth({ action: 'login', email: 'conta@biomatch.test', password: 'senha-nova-456' })).status, 200);
-
-    process.env.GOOGLE_CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
-    process.env.GOOGLE_CLIENT_SECRET = 'test-only-secret';
-    process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
-    const { handleGoogleStart, handleGoogleCallback } = require('../platform-db');
-    const startReq = request('GET', '/auth/google', null, '198.51.100.20'), startRes = response();
-    await handleGoogleStart(startReq, startRes);
-    assert.equal(startRes.status, 302);
-    const authUrl = new URL(startRes.headers.location);
-    assert.equal(authUrl.origin, 'https://accounts.google.com');
-    assert.equal(authUrl.searchParams.get('code_challenge_method'), 'S256');
-    const state = authUrl.searchParams.get('state');
-    global.fetch = async (url) => String(url).includes('/tokeninfo?')
-      ? { ok: true, json: async () => ({ aud: process.env.GOOGLE_CLIENT_ID, iss: 'https://accounts.google.com', exp: String(Math.floor(Date.now() / 1000) + 300), email_verified: 'true', email: 'google@biomatch.test', sub: 'google-sub-test', name: 'Google Estudante' }) }
-      : { ok: true, json: async () => ({ id_token: 'mock-google-id-token' }) };
-    const callbackReq = request('GET', '/auth/google/callback?code=google-code&state=' + encodeURIComponent(state));
-    const callbackRes = response(); await handleGoogleCallback(callbackReq, callbackRes);
-    assert.equal(callbackRes.status, 302);
-    const exchangeCode = new URL(callbackRes.headers.location).searchParams.get('oauth_code');
-    const googleLogin = await auth({ action: 'oauth_exchange', code: exchangeCode });
-    assert.equal(googleLogin.status, 200);
-    assert.equal(googleLogin.data.user.name, 'Google Estudante');
-    assert.equal((await auth({ action: 'oauth_exchange', code: exchangeCode })).status, 401);
-    global.fetch = originalFetch;
-    for (const [key, value] of Object.entries(originalEnv)) process.env[key] = value;
-    for (const key of Object.keys(process.env)) if (!(key in originalEnv)) delete process.env[key];
+    assert.equal((await auth({ action: 'oauth_exchange', code: 'retired-google-login' })).status, 404);
     const guest = await api('POST', 'guest', { name: 'Teste Turso' });
     assert.equal(guest.status, 201);
     const id = guest.data.guestId;
@@ -166,7 +141,7 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     await liveStore.deleteRoom(room.code);
 
     await db.close();
-    console.log('Persistence tests passed: email/Google authentication, password reset expiry/hash/use-once/session revocation, guests, progress, duplicate protection, leaderboard and live persistence.');
+    console.log('Persistence tests passed: email/password authentication, password reset expiry/hash/use-once/session revocation, guests, progress, duplicate protection, leaderboard and live persistence.');
   } catch (error) {
     console.error(error);
     process.exitCode = 1;
