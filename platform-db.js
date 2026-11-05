@@ -17,8 +17,8 @@ async function database() {
       else if (process.env.NODE_ENV === 'production') throw new Error('Banco Turso não configurado no ambiente de produção.');
       else client = createClient({ url: 'file:./biomatch.local.db' });
       const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sqlite.sql'), 'utf8');
-      const statements = schema.split(';').map(sql => sql.trim()).filter(Boolean).map(sql => ({ sql, args: [] }));
-      await client.batch(statements, 'write');
+      const statements = schema.split(';').map(sql => sql.trim()).filter(Boolean);
+      for (const sql of statements) await client.execute(sql);
       return client;
     })().catch(error => { initialization = null; throw error; });
   }
