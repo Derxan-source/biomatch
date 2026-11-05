@@ -155,4 +155,5 @@ async function handlePlatform(req, res) {
       status === 400 || status === 413 ? error.message : 'Não foi possível acessar os dados da plataforma.' });
   }
 }
-module.exports = { handlePlatform };
+async function getDatabase() { return database(); }
+module.exports = { handlePlatform, getDatabase };
