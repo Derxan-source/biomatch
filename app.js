@@ -9,8 +9,40 @@ function savePlayerSession(session,room,playerId){[['biomatch-session',session],
 function clearPlayerSession(){['biomatch-session','biomatch-room','biomatch-player-id'].forEach(key=>{localStorage.removeItem(key);sessionStorage.removeItem(key)})}
 const palette=['rose','blue','amber','green'];
 function showScreen(id){screens.forEach(s=>$('#'+s).classList.toggle('active',s===id));state.screen=id;document.body.dataset.view=id.replace('-screen','');window.scrollTo({top:0,behavior:'smooth'})}
-function enterGuest(name){const nickname=safeNickname(name);if(nickname.length<2){$('#guest-name').setCustomValidity('Digite pelo menos 2 caracteres.');$('#guest-name').reportValidity();return}sessionStorage.setItem('biomatch-guest','1');sessionStorage.setItem('biomatch-guest-name',nickname);localStorage.setItem('biomatch-guest','1');localStorage.setItem('biomatch-guest-name',nickname);window.dispatchEvent(new Event('biomatch:guest-enter'));$('#dashboard-greeting').textContent=nickname;$('#account-chip').textContent=nickname+' · visitante';$('#account-chip').classList.remove('hidden');$('#logout-button').classList.remove('hidden');showScreen('home-screen');const invite=new URLSearchParams(location.search).get('sala')||'';if(/^[A-HJ-NP-Z2-9]{6}$/i.test(invite)){openSetup('join')}}
-function logoutGuest(){if(state.socket){try{if(state.socket.readyState===WebSocket.OPEN)state.socket.send(JSON.stringify({type:'leave_room'}));state.socket.close()}catch{}}clearInterval(state.heartbeat);clearTimeout(state.heartbeatTimeout);clearTimeout(state.reconnectTimer);clearInterval(state.timer);clearPlayerSession();['biomatch-guest','biomatch-guest-name','biomatch-nickname','bm-platform-id'].forEach(k=>{sessionStorage.removeItem(k);localStorage.removeItem(k)});state.socket=null;state.room=null;state.playerId=null;state.isHost=false;state.players=[];state.phase='lobby';showScreen('login-screen');$('#account-chip').classList.add('hidden');$('#logout-button').classList.add('hidden');$('#guest-name').value=''}
+function enterGuest(name){localStorage.removeItem('biomatch-auth-token');localStorage.removeItem('biomatch-auth-user');const nickname=safeNickname(name);if(nickname.length<2){$('#guest-name').setCustomValidity('Digite pelo menos 2 caracteres.');$('#guest-name').reportValidity();return}sessionStorage.setItem('biomatch-guest','1');sessionStorage.setItem('biomatch-guest-name',nickname);localStorage.setItem('biomatch-guest','1');localStorage.setItem('biomatch-guest-name',nickname);window.dispatchEvent(new Event('biomatch:guest-enter'));$('#dashboard-greeting').textContent=nickname;$('#account-chip').textContent=nickname+' · visitante';$('#account-chip').classList.remove('hidden');$('#logout-button').classList.remove('hidden');showScreen('home-screen');const invite=new URLSearchParams(location.search).get('sala')||'';if(/^[A-HJ-NP-Z2-9]{6}$/i.test(invite)){openSetup('join')}}
+function logoutGuest(){const authToken=localStorage.getItem('biomatch-auth-token');if(authToken)fetch('/api/auth',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+authToken},body:JSON.stringify({action:'logout'})}).catch(()=>{});localStorage.removeItem('biomatch-auth-token');localStorage.removeItem('biomatch-auth-user');if(state.socket){try{if(state.socket.readyState===WebSocket.OPEN)state.socket.send(JSON.stringify({type:'leave_room'}));state.socket.close()}catch{}}clearInterval(state.heartbeat);clearTimeout(state.heartbeatTimeout);clearTimeout(state.reconnectTimer);clearInterval(state.timer);clearPlayerSession();['biomatch-guest','biomatch-guest-name','biomatch-nickname','bm-platform-id'].forEach(k=>{sessionStorage.removeItem(k);localStorage.removeItem(k)});state.socket=null;state.room=null;state.playerId=null;state.isHost=false;state.players=[];state.phase='lobby';showScreen('login-screen');$('#account-chip').classList.add('hidden');$('#logout-button').classList.add('hidden');$('#guest-name').value=''}
+
+let authMode='login';
+function setAuthMode(mode){
+ authMode=mode;
+ document.querySelectorAll('[data-auth-tab]').forEach(button=>button.classList.toggle('active',button.dataset.authTab===mode));
+ $('#auth-name').hidden=mode!=='register';$('#auth-name-label').hidden=mode!=='register';
+ $('#auth-name').required=mode==='register';
+ $('#auth-password').autocomplete=mode==='register'?'new-password':'current-password';
+ $('#auth-heading').textContent=mode==='register'?'Crie sua conta.':'Entre para aprender.';
+ $('#auth-description').textContent=mode==='register'?'Salve sua evolução e continue de onde parou em qualquer visita.':'Acesse sua conta e continue sua jornada de descobertas.';
+ $('#auth-submit').innerHTML=mode==='register'?'Criar minha conta <span>↗</span>':'Entrar na minha conta <span>↗</span>';
+ $('#auth-error').textContent='';
+}
+document.querySelectorAll('[data-auth-tab]').forEach(button=>button.addEventListener('click',()=>setAuthMode(button.dataset.authTab)));
+$('#password-toggle').addEventListener('click',()=>{const input=$('#auth-password'),show=input.type==='password';input.type=show?'text':'password';$('#password-toggle').setAttribute('aria-label',show?'Ocultar senha':'Mostrar senha')});
+$('#auth-forgot').addEventListener('click',()=>{$('#auth-error').textContent='A recuperação por e-mail ainda será ativada. Por enquanto, entre com sua senha.'});
+$('#auth-form').addEventListener('submit',async event=>{
+ event.preventDefault();const button=$('#auth-submit');button.disabled=true;button.textContent=authMode==='register'?'Criando conta…':'Entrando…';$('#auth-error').textContent='';
+ try{
+  const payload={action:authMode,email:$('#auth-email').value.trim(),password:$('#auth-password').value};
+  if(authMode==='register')payload.name=$('#auth-name').value.trim();
+  const response=await fetch('/api/auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+  const data=await response.json();if(!response.ok)throw new Error(data.error||'Não foi possível entrar.');
+  localStorage.setItem('biomatch-auth-token',data.token);localStorage.setItem('biomatch-auth-user',JSON.stringify(data.user));
+  ['biomatch-guest','biomatch-guest-name','bm-platform-id'].forEach(key=>{localStorage.removeItem(key);sessionStorage.removeItem(key)});
+  const nickname=data.user.name||$('#auth-name').value.trim()||'Estudante';
+  $('#dashboard-greeting').textContent=nickname;$('#account-chip').textContent=nickname+' · conta';$('#account-chip').classList.remove('hidden');$('#logout-button').classList.remove('hidden');
+  showScreen('home-screen');window.dispatchEvent(new Event('biomatch:guest-enter'));
+ }catch(error){$('#auth-error').textContent=error.message}
+ finally{button.disabled=false;button.innerHTML=authMode==='register'?'Criar minha conta <span>↗</span>':'Entrar na minha conta <span>↗</span>'}
+});
+
 $('#guest-form').addEventListener('submit',event=>{event.preventDefault();enterGuest($('#guest-name').value)});
 $('#guest-name').addEventListener('input',()=>$('#guest-name').setCustomValidity(''));
 $('#logout-button').addEventListener('click',logoutGuest);
@@ -104,8 +136,9 @@ function answerStudy(choice){if(state.studyAnswered)return;state.studyAnswered=t
 $('#study-next').onclick=()=>{if(state.studyIndex>=CONTENT.length-1)state.studyIndex=0;else state.studyIndex++;state.studyAnswered=false;renderStudy()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')Object.values(dialogs).forEach(d=>{if(d.open)d.close()})});
 const inviteCode=(new URLSearchParams(location.search).get('sala')||'').trim().toUpperCase();
-const rememberedRoom=readSaved('biomatch-room'),rememberedSession=readSaved('biomatch-session'),guestActive=sessionStorage.getItem('biomatch-guest')==='1'||localStorage.getItem('biomatch-guest')==='1';
-if(guestActive){const guestName=sessionStorage.getItem('biomatch-guest-name')||localStorage.getItem('biomatch-guest-name')||'Visitante';sessionStorage.setItem('biomatch-guest','1');sessionStorage.setItem('biomatch-guest-name',guestName);$('#dashboard-greeting').textContent=guestName;$('#account-chip').textContent=guestName+' · visitante';$('#account-chip').classList.remove('hidden');$('#logout-button').classList.remove('hidden');if(/^[A-HJ-NP-Z2-9]{6}$/.test(inviteCode)){if(rememberedRoom===inviteCode&&rememberedSession){state.room=rememberedRoom;connectRoom('join',guestName)}else{if(rememberedRoom!==inviteCode)clearPlayerSession();$('#join-code').value=inviteCode;openSetup('join')}}else if(rememberedRoom&&rememberedSession){state.room=rememberedRoom;connectRoom('join',guestName)}else showScreen('home-screen')}
+const rememberedRoom=readSaved('biomatch-room'),rememberedSession=readSaved('biomatch-session'),authToken=localStorage.getItem('biomatch-auth-token'),authUser=JSON.parse(localStorage.getItem('biomatch-auth-user')||'null'),guestActive=sessionStorage.getItem('biomatch-guest')==='1'||localStorage.getItem('biomatch-guest')==='1';
+if(authToken&&authUser){const accountName=authUser.name||'Estudante';$('#dashboard-greeting').textContent=accountName;$('#account-chip').textContent=accountName+' · conta';$('#account-chip').classList.remove('hidden');$('#logout-button').classList.remove('hidden');showScreen('home-screen');window.dispatchEvent(new Event('biomatch:guest-enter'))}
+else if(guestActive){const guestName=sessionStorage.getItem('biomatch-guest-name')||localStorage.getItem('biomatch-guest-name')||'Visitante';sessionStorage.setItem('biomatch-guest','1');sessionStorage.setItem('biomatch-guest-name',guestName);$('#dashboard-greeting').textContent=guestName;$('#account-chip').textContent=guestName+' · visitante';$('#account-chip').classList.remove('hidden');$('#logout-button').classList.remove('hidden');if(/^[A-HJ-NP-Z2-9]{6}$/.test(inviteCode)){if(rememberedRoom===inviteCode&&rememberedSession){state.room=rememberedRoom;connectRoom('join',guestName)}else{if(rememberedRoom!==inviteCode)clearPlayerSession();$('#join-code').value=inviteCode;openSetup('join')}}else if(rememberedRoom&&rememberedSession){state.room=rememberedRoom;connectRoom('join',guestName)}else showScreen('home-screen')}
 else showScreen('login-screen');
 // Ampliar o convite por QR sem sair da sala.
 $('#invite-qr-trigger').addEventListener('click',()=>{const source=$('#invite-qr').getAttribute('src');if(!source)return;$('#invite-qr-large').src=source;$('#qr-dialog').showModal()});
