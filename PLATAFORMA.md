@@ -21,7 +21,7 @@ Configure no Render (Environment):
 
 O endpoint público `/api/firebase-config` expõe somente project ID, Auth domain e a chave web, que o Firebase espera no cliente. A chave privada da conta de serviço permanece no backend. Em produção, use uma conta de serviço com permissões mínimas do Firebase Authentication e nunca comite o JSON.
 
-Na primeira chamada da API, o backend executa as instruções idempotentes de `db/schema.sqlite.sql` para criar as tabelas e índices. Não é necessário colar o token em nenhum arquivo do repositório.
+Na inicialização de produção, o backend executa as instruções idempotentes de `db/schema.sqlite.sql` para criar as tabelas e índices. Não é necessário colar o token em nenhum arquivo do repositório.
 
 ## Tabelas
 - `users`: perfil de visitante, XP, níveis, estatísticas e medalhas.
@@ -47,6 +47,6 @@ Se as variáveis Turso não estiverem definidas, o desenvolvimento local cria `b
 Cadastro, login, redefinição e manutenção de sessões são realizados pelo Firebase Authentication. O navegador envia o ID token à API; o backend verifica assinatura, validade e revogação pelo Firebase Admin SDK e usa o UID como chave do perfil no Turso. Tokens de renovação ficam no navegador e são usados para renovar o ID token. Perfis de visitantes continuam sem Firebase.
 
 ## Migração das contas existentes
-O script `npm run migrate:firebase-auth` lê diretamente perfis com email e hash scrypt do Turso e importa-os em lotes para Firebase Auth, preservando UID, email, nome e senha. Não gera arquivo com os hashes. Ele só limpa `password_hash` e sessões legadas depois de verificar que todas as contas estão no Firebase. Configure temporariamente as quatro variáveis Firebase, `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN` no ambiente seguro que executar o script. Faça backup do Turso antes da migração e mantenha o script em execução até a confirmação final. Em caso de erro, os hashes antigos são preservados e a mensagem indica o lote que precisa de atenção. Após a migração, as contas antigas precisarão entrar novamente porque as sessões locais anteriores serão invalidadas.
+Na inicialização em produção, antes de abrir a porta para tráfego, o servidor importa as contas legadas do Turso para Firebase Auth e verifica UID e email. O processo é idempotente, guarda o marcador `firebase_migrated` e preserva os hashes scrypt antigos para permitir rollback. Se a importação falhar, a inicialização para sem apagar esses hashes. Depois de validar o deploy e o login de contas migradas, `npm run migrate:firebase-auth -- --finalize` pode remover explicitamente os hashes e sessões locais legadas. O comando também pode ser executado em ambiente seguro com `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` e as credenciais Firebase.
 
-O importador usa `STANDARD_SCRYPT` com os parâmetros usados por `crypto.scrypt` sem opções explícitas (N=16384, r=8, p=1 e chave derivada de 64 bytes). A importação real precisa ser validada contra o projeto Firebase de destino antes de remover as credenciais antigas.
+O importador usa `STANDARD_SCRYPT` com os parâmetros usados por `crypto.scrypt` sem opções explícitas (N=16384, r=8, p=1 e chave derivada de 64 bytes). A primeira inicialização real com acesso ao Turso é a validação da importação contra o projeto Firebase de destino; os hashes antigos permanecem preservados até a finalização manual.

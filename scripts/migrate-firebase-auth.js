@@ -5,11 +5,8 @@
 const { createClient } = require('@libsql/client');
 const { getFirebaseAuth } = require('../firebase-auth');
 
-async function main() {
-  const url = process.env.TURSO_DATABASE_URL, authToken = process.env.TURSO_AUTH_TOKEN;
-  if (!url || !authToken) throw new Error('Configure TURSO_DATABASE_URL e TURSO_AUTH_TOKEN.');
-  const db = createClient({ url, authToken }), auth = getFirebaseAuth();
-  const result = await db.execute('SELECT id, email, display_name, password_hash FROM users WHERE email IS NOT NULL AND password_hash IS NOT NULL ORDER BY id');
+async function migrateFirebaseUsers({ db, auth, finalize = false }) {
+  const result = await db.execute('SELECT id, email, display_name, password_hash FROM users WHERE email IS NOT NULL AND password_hash IS NOT NULL AND firebase_migrated = 0 ORDER BY id');
   const records = result.rows.map(row => {
     const parts = String(row.password_hash).split(':');
     if (parts.length !== 2 || !/^[a-f\d]{32}$/i.test(parts[0]) || !/^[a-f\d]{128}$/i.test(parts[1])) {
@@ -23,7 +20,14 @@ async function main() {
       passwordHash: Buffer.from(parts[1], 'hex')
     };
   });
-  if (!records.length) { console.log('Nenhuma conta legada com senha para migrar.'); return; }
+  if (!records.length) {
+    if (finalize) await db.batch([
+      { sql: 'UPDATE users SET password_hash = NULL WHERE firebase_migrated = 1', args: [] },
+      { sql: 'DELETE FROM auth_sessions', args: [] },
+      { sql: 'DELETE FROM password_reset_tokens', args: [] }
+    ], 'write');
+    return { imported: 0, alreadyPresent: 0, migrated: 0 };
+  }
 
   let imported = 0, alreadyPresent = 0;
   for (let offset = 0; offset < records.length; offset += 1000) {
@@ -56,13 +60,26 @@ async function main() {
     const current = await auth.getUser(record.uid);
     if (current.email?.toLowerCase() !== record.email) throw new Error(`Verificação falhou para ${record.uid}; hashes legados foram preservados.`);
   }
-  await db.batch([
-    { sql: 'UPDATE users SET password_hash = NULL WHERE email IS NOT NULL', args: [] },
+  await db.batch(records.map(record => ({
+    sql: 'UPDATE users SET firebase_migrated = 1 WHERE id = ? AND password_hash IS NOT NULL', args: [record.uid]
+  })), 'write');
+  if (finalize) await db.batch([
+    { sql: 'UPDATE users SET password_hash = NULL WHERE firebase_migrated = 1', args: [] },
     { sql: 'DELETE FROM auth_sessions', args: [] },
     { sql: 'DELETE FROM password_reset_tokens', args: [] }
   ], 'write');
-  console.log(`Migração concluída: ${imported} importada(s), ${alreadyPresent} já existente(s); hashes antigos removidos após verificação.`);
-  await db.close();
+  return { imported, alreadyPresent, migrated: records.length };
 }
 
-main().catch(error => { console.error('Migração Firebase não concluída:', error.message); process.exitCode = 1; });
+async function main() {
+  const url = process.env.TURSO_DATABASE_URL, authToken = process.env.TURSO_AUTH_TOKEN;
+  if (!url || !authToken) throw new Error('Configure TURSO_DATABASE_URL e TURSO_AUTH_TOKEN.');
+  const db = createClient({ url, authToken });
+  try {
+    const result = await migrateFirebaseUsers({ db, auth: getFirebaseAuth(), finalize: process.argv.includes('--finalize') });
+    console.log(`Migração concluída: ${result.imported} importada(s), ${result.alreadyPresent} já existente(s), ${result.migrated} marcada(s).`);
+  } finally { await db.close(); }
+}
+
+if (require.main === module) main().catch(error => { console.error('Migração Firebase não concluída:', error.message); process.exitCode = 1; });
+module.exports = { migrateFirebaseUsers };

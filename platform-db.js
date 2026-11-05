@@ -24,6 +24,7 @@ async function database() {
       const names = new Set(columns.rows.map(row => row.name));
       if (!names.has('email')) await client.execute('ALTER TABLE users ADD COLUMN email TEXT');
       if (!names.has('password_hash')) await client.execute('ALTER TABLE users ADD COLUMN password_hash TEXT');
+      if (!names.has('firebase_migrated')) await client.execute('ALTER TABLE users ADD COLUMN firebase_migrated INTEGER NOT NULL DEFAULT 0');
       await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email COLLATE NOCASE) WHERE email IS NOT NULL');
       return client;
     })().catch(error => { initialization = null; throw error; });

@@ -71,5 +71,12 @@ async function restoreLiveRooms(){
   console.log('BioMatch: '+rooms.size+' sala(s) restaurada(s) do Turso.');
  }catch(error){console.error('BioMatch restore live rooms:',error.message);throw error}
 }
-restoreLiveRooms().then(()=>server.listen(PORT,HOST,()=>console.log(`BioMatch pronto em http://localhost:${PORT}`))).catch(()=>{process.exitCode=1});
+async function prepareFirebaseAccounts(){
+ if(process.env.NODE_ENV!=='production')return;
+ const configured=['TURSO_DATABASE_URL','TURSO_AUTH_TOKEN','FIREBASE_PROJECT_ID','FIREBASE_SERVICE_ACCOUNT_JSON'];
+ if(!configured.every(name=>process.env[name]))throw new Error('Migração de contas exige Turso e Firebase configurados no ambiente de produção.');
+ const db=await require('./platform-db').getDatabase(),{getFirebaseAuth}=require('./firebase-auth'),{migrateFirebaseUsers}=require('./scripts/migrate-firebase-auth');
+ const result=await migrateFirebaseUsers({db,auth:getFirebaseAuth()});console.log(`BioMatch Firebase migration: ${result.imported} importada(s), ${result.alreadyPresent} já existente(s), ${result.migrated} marcada(s).`)
+}
+prepareFirebaseAccounts().then(restoreLiveRooms).then(()=>server.listen(PORT,HOST,()=>console.log(`BioMatch pronto em http://localhost:${PORT}`))).catch(error=>{console.error('BioMatch startup:',error.message);process.exitCode=1});
 

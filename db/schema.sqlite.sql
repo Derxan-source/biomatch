@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL CHECK(length(display_name) BETWEEN 2 AND 18),
   email TEXT,
   password_hash TEXT,
+  firebase_migrated INTEGER NOT NULL DEFAULT 0 CHECK(firebase_migrated IN (0, 1)),
   xp INTEGER NOT NULL DEFAULT 0 CHECK(xp >= 0),
   answers INTEGER NOT NULL DEFAULT 0 CHECK(answers >= 0),
   correct INTEGER NOT NULL DEFAULT 0 CHECK(correct >= 0 AND correct <= answers),
