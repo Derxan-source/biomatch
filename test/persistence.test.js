@@ -8,7 +8,7 @@ process.env.BIOMATCH_LOCAL_DB = 'file:./biomatch.test.db';
 delete process.env.TURSO_DATABASE_URL;
 delete process.env.TURSO_AUTH_TOKEN;
 
-const { handlePlatform, getDatabase } = require('../platform-db');
+const { handlePlatform, handleAuth, getDatabase } = require('../platform-db');
 const liveStore = require('../live-store');
 const questionBank = require('../question-banks.json');
 
@@ -26,11 +26,13 @@ function response() {
     end(value) { this.body = value || ''; }
   };
 }
-async function api(method, action, body = {}, guestId = '') {
+async function auth(body, token = '') { const req = request('POST', '/api/auth', body); req.headers = token ? { authorization: 'Bearer ' + token } : {}; const res = response(); await handleAuth(req, res); return { status: res.status, data: JSON.parse(res.body || '{}') }; }
+async function api(method, action, body = {}, guestId = '', token = '') {
   const url = '/api/platform?action=' + encodeURIComponent(action) +
     (guestId ? '&guestId=' + encodeURIComponent(guestId) : '');
   const res = response();
-  await handlePlatform(request(method, url, { ...body, action, guestId }), res);
+  const req = request(method, url, { ...body, action, guestId }); req.headers = token ? { authorization: 'Bearer ' + token } : {};
+  await handlePlatform(req, res);
   return { status: res.status, data: JSON.parse(res.body || '{}') };
 }
 
@@ -39,6 +41,16 @@ async function api(method, action, body = {}, guestId = '') {
     try { fs.rmSync('./biomatch.test.db' + suffix); } catch {}
   }
   try {
+    const account = await auth({ action: 'register', name: 'Conta Teste', email: 'conta@biomatch.test', password: 'senha-forte-123' });
+    assert.equal(account.status, 201);
+    assert.ok(account.data.token);
+    const accountSnapshot = await api('GET', 'snapshot', {}, '', account.data.token);
+    assert.equal(accountSnapshot.status, 200);
+    assert.equal(accountSnapshot.data.profile.name, 'Conta Teste');
+    const login = await auth({ action: 'login', email: 'CONTA@BIOMATCH.TEST', password: 'senha-forte-123' });
+    assert.equal(login.status, 200);
+    const invalidLogin = await auth({ action: 'login', email: 'conta@biomatch.test', password: 'senha-errada' });
+    assert.equal(invalidLogin.status, 401);
     const guest = await api('POST', 'guest', { name: 'Teste Turso' });
     assert.equal(guest.status, 201);
     const id = guest.data.guestId;
@@ -82,7 +94,7 @@ async function api(method, action, body = {}, guestId = '') {
 
     const db = await getDatabase();
     await db.close();
-    console.log('Persistence tests passed: guest, progress, duplicate protection, leaderboard, live rooms and generated sets.');
+    console.log('Persistence tests passed: email registration/login, bearer session, guests, progress, duplicate protection, leaderboard, live rooms and generated sets.');
   } catch (error) {
     console.error(error);
     process.exitCode = 1;
