@@ -8,7 +8,7 @@ const rooms=new Map(),sessions=new Map(),limits=new Map(),alphabet='ABCDEFGHJKLM
 const generatedSets=new Map();
 const platformProfiles=new Map(),platformFriends=new Map(),platformMessages=new Map(),platformChallenges=new Map();
 let platformQuestionBank=[];try{platformQuestionBank=require('./question-banks.json')}catch{}
-function platformName(v){return typeof v==='string'?v.replace(/[<>\\u0000-\\u001f]/g,'').trim().replace(/\\s+/g,' ').slice(0,18):''}
+function platformName(v){return typeof v==='string'?v.replace(/[<>\u0000-\u001f]/g,'').trim().replace(/\s+/g,' ').slice(0,18):''}
 function platformProfile(p){return {id:p.id,name:p.name,xp:p.xp,level:Math.floor(p.xp/500)+1,answers:p.answers,correct:p.correct,streak:p.streak,badges:p.badges}}
 function platformFind(guestId){return typeof guestId==='string'?platformProfiles.get(guestId):null}
 function platformReply(res,status,data){return jsonApi(res,status,data)}
@@ -17,7 +17,7 @@ async function handlePlatform(req,res){
  const url=new URL(req.url,'http://localhost'),action=req.method==='GET'?url.searchParams.get('action'):body.action,guestId=req.method==='GET'?url.searchParams.get('guestId'):body.guestId;
  if(action==='guest'&&req.method==='POST'){
   const name=platformName(body.name)||'Visitante';if([...platformProfiles.values()].some(p=>p.name.toLowerCase()===name.toLowerCase()))return platformReply(res,409,{error:'Esse apelido já está em uso. Escolha outro.'});
-  const id=crypto.randomUUID(),p={id,name,xp:0,answers:0,correct:0,streak:0,badges:[],attempts:[],createdAt:Date.now()};platformProfiles.set(id,p);platformFriends.set(id,[]);platformMessages.set(id,[]);platformChallenges.set(id,[]);return platformReply(res,201,{guestId:id,profile:platformProfile(p)});
+  const id=crypto.randomUUID(),p={id,name,xp:0,answers:0,correct:0,streak:0,badges:[],attempts:[],subjectStats:{},dailyAnswers:0,dailyDate:new Date().toISOString().slice(0,10),createdAt:Date.now()};platformProfiles.set(id,p);platformFriends.set(id,[]);platformMessages.set(id,[]);platformChallenges.set(id,[]);return platformReply(res,201,{guestId:id,profile:platformProfile(p)});
  }
  const p=platformFind(guestId);if(!p)return platformReply(res,401,{error:'Sua sessão temporária expirou. Entre novamente como visitante.'});
  if(action==='snapshot')return platformReply(res,200,{profile:platformProfile(p),friends:platformFriends.get(p.id)||[],messages:platformMessages.get(p.id)||[],challenges:platformChallenges.get(p.id)||[]});
@@ -26,9 +26,9 @@ async function handlePlatform(req,res){
   const q=platformQuestionBank.find(x=>x.id===body.questionId);if(!q)return platformReply(res,404,{error:'Questão não encontrada.'});
   if(p.attempts.some(a=>a.questionId===q.id))return platformReply(res,409,{error:'Você já respondeu esta questão nesta sessão.'});
   const choice=Number(body.choice);if(!Number.isInteger(choice)||choice<0||choice>3)return platformReply(res,400,{error:'Alternativa inválida.'});
-  const correct=choice===q.answer,earned=correct?100:10;p.answers++;if(correct)p.correct++;p.xp+=earned;p.attempts.push({questionId:q.id,choice,correct,earned,at:Date.now()});
+  const correct=choice===q.answer,earned=correct?100:10;p.answers++;if(correct)p.correct++;p.xp+=earned;const today=new Date().toISOString().slice(0,10);if(p.dailyDate!==today){p.dailyDate=today;p.dailyAnswers=0}p.dailyAnswers++;const stats=p.subjectStats[q.subject]||(p.subjectStats[q.subject]={answers:0,correct:0});stats.answers++;if(correct)stats.correct++;p.attempts.push({questionId:q.id,subject:q.subject,choice,correct,earned,at:Date.now()});
   const badges=[{n:1,label:'Primeiros passos'},{n:5,label:'Curioso incansável'},{n:10,label:'Aprendiz dedicado'},{n:20,label:'Explorador do conhecimento'}];for(const b of badges)if(p.answers>=b.n&&!p.badges.includes(b.label))p.badges.push(b.label);
-  return platformReply(res,200,{correct,answer:q.answer,explanation:q.explanation,earned,profile:platformProfile(p)});
+  return platformReply(res,200,{correct,answer:q.answer,explanation:q.explanation,earned,profile:platformProfile(p),missions:{daily:{progress:p.dailyAnswers,target:3,complete:p.dailyAnswers>=3},tenAnswers:{progress:p.answers,target:10,complete:p.answers>=10}}});
  }
  if(action==='leaderboard'){const rows=[...platformProfiles.values()].sort((a,b)=>b.xp-a.xp||a.createdAt-b.createdAt).slice(0,50).map(x=>({name:x.name,xp:x.xp,level:Math.floor(x.xp/500)+1}));return platformReply(res,200,{rows})}
  if(action==='friend'||action==='message'||action==='challenge'){
