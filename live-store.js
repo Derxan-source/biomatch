@@ -8,7 +8,7 @@ async function saveRoom(room) {
     phase: room.phase, deadline: room.deadline, soloTest: room.soloTest,
     questions: room.questions,
     players: [...room.players.values()].map(p => ({
-      id:p.id, session:p.session, nickname:p.nickname, score:p.score
+      id:p.id, session:p.session, nickname:p.nickname, score:p.score, disconnectedAt:p.disconnectedAt||null
     })),
     answers: [...room.answers.entries()]
   };
