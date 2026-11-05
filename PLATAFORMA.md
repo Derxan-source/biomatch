@@ -9,7 +9,7 @@
 - Modo visitante sem login; Google OAuth continua adiado.
 
 ## Persistência Turso
-A API multidisciplinar usa `platform-db.js` e `@libsql/client` para armazenar perfis, tentativas, progresso, amizades, mensagens e desafios em SQLite/libSQL no Turso.
+A API multidisciplinar e o quiz ao vivo usam `platform-db.js`, `live-store.js` e `@libsql/client` para armazenar perfis, tentativas, progresso, amizades, mensagens, desafios e estado de salas em SQLite/libSQL no Turso.
 
 Configure no Render (Environment):
 - `TURSO_DATABASE_URL`: URL `libsql://...` do banco.
@@ -29,7 +29,7 @@ Na primeira chamada da API, o backend executa as instruções idempotentes de `d
 - `live_question_sets`: conjuntos de perguntas geradas, com expiração, para que o token de criação não dependa da memória do processo.
 
 ## Limitações atuais
-- Visitantes usam um identificador armazenado em `sessionStorage`. O progresso fica salvo no banco, mas limpar os dados da sessão ou trocar de navegador perde o vínculo com o perfil; ainda não há recuperação de conta.
+- Visitantes usam um identificador salvo no `localStorage` do navegador. O progresso fica salvo no banco, mas limpar os dados do navegador ou trocar de dispositivo ainda impede a recuperação sem uma conta autenticada.
 - Amizades e desafios são registrados como convites; aceite/recusa e partidas competitivas completas serão etapas posteriores.
 - O quiz ao vivo mantém em memória apenas sockets, timers e mapas de execução enquanto o processo está ativo. O estado de salas, jogadores, sessões de reconexão, placares, perguntas e respostas é persistido em `live_rooms` e restaurado na inicialização. Tokens temporários de perguntas geradas são persistidos em `live_question_sets`.
 - O banco de questões inicial contém 20 perguntas e deve ser ampliado/revisado pedagogicamente.
