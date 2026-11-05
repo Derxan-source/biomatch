@@ -11,6 +11,6 @@
     "load-test": "node load-test.js"
   },
   "dependencies": {
-    "@libsql/client": "^0.15.15"
+    "@libsql/client": "^0.18.0"
   }
 }
