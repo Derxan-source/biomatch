@@ -4,7 +4,7 @@ const screens=['login-screen','home-screen','lobby-screen','game-screen','study-
 let state={screen:'login-screen',mode:'create',socket:null,room:null,playerId:null,isHost:false,soloTest:false,players:[],phase:'lobby',question:null,questionNumber:0,questionCount:10,deadline:0,submitted:false,choice:null,answerCount:0,eligibleCount:0,ranking:[],scores:[],timer:null,heartbeat:null,heartbeatTimeout:null,reconnectTimer:null,reconnectAttempt:0,reconnecting:false,studyIndex:0,studyAnswered:false,customToken:null};
 let inviteUrl='',qrLibraryPromise=null,inviteRenderedFor='',noticeTimer=null;
 const dialogs={setup:$('#setup-dialog'),rules:$('#rules-dialog'),players:$('#players-dialog')};
-function readSaved(key){let value=sessionStorage.getItem(key);if(!value){value=localStorage.getItem(key);if(value){sessionStorage.setItem(key,value);localStorage.removeItem(key)}}return value}
+function readSaved(key){let value=sessionStorage.getItem(key);if(!value){value=localStorage.getItem(key);if(value)sessionStorage.setItem(key,value)}return value}
 function savePlayerSession(session,room,playerId){[['biomatch-session',session],['biomatch-room',room],['biomatch-player-id',playerId]].forEach(([k,v])=>{localStorage.setItem(k,v);sessionStorage.setItem(k,v)})}
 function clearPlayerSession(){['biomatch-session','biomatch-room','biomatch-player-id'].forEach(key=>{localStorage.removeItem(key);sessionStorage.removeItem(key)})}
 const palette=['rose','blue','amber','green'];
