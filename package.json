@@ -9,5 +9,8 @@
   "scripts": {
     "start": "node server.js",
     "load-test": "node load-test.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.15.15"
   }
 }
