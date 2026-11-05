@@ -5,7 +5,7 @@
 - Banco inicial com 5 perguntas por disciplina.
 - Modo de revisão com feedback e explicações.
 - XP, níveis, medalhas, missão diária e estatísticas por disciplina.
-- Ranking, amizades, mensagens e convites de desafios.
+- Ranking, amizades, mensagens e convites de desafios. O estado das salas ao vivo também é salvo no Turso e restaurado quando o servidor reinicia.
 - Modo visitante sem login; Google OAuth continua adiado.
 
 ## Persistência Turso
@@ -25,11 +25,13 @@ Na primeira chamada da API, o backend executa as instruções idempotentes de `d
 - `friendships`: convites de amizade.
 - `direct_messages`: mensagens diretas.
 - `challenges`: convites de desafios.
+- `live_rooms`: estado serializado das salas, participantes, sessões, perguntas, placar e respostas para restauração após reinício.
+- `live_question_sets`: conjuntos de perguntas geradas, com expiração, para que o token de criação não dependa da memória do processo.
 
 ## Limitações atuais
 - Visitantes usam um identificador armazenado em `sessionStorage`. O progresso fica salvo no banco, mas limpar os dados da sessão ou trocar de navegador perde o vínculo com o perfil; ainda não há recuperação de conta.
 - Amizades e desafios são registrados como convites; aceite/recusa e partidas competitivas completas serão etapas posteriores.
-- O quiz ao vivo antigo continua separado e usa seu próprio fluxo de salas em memória.
+- O quiz ao vivo mantém em memória apenas sockets, timers e mapas de execução enquanto o processo está ativo. O estado de salas, jogadores, sessões de reconexão, placares, perguntas e respostas é persistido em `live_rooms` e restaurado na inicialização. Tokens temporários de perguntas geradas são persistidos em `live_question_sets`.
 - O banco de questões inicial contém 20 perguntas e deve ser ampliado/revisado pedagogicamente.
 - Google OAuth não está incluído.
 
