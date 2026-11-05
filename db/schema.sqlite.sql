@@ -53,3 +53,9 @@ CREATE TABLE IF NOT EXISTS challenges (
   CHECK(challenger_id <> challenged_id)
 );
 CREATE INDEX IF NOT EXISTS idx_challenges_users ON challenges(challenger_id, challenged_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS live_state (
+  state_key TEXT PRIMARY KEY,
+  state_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
