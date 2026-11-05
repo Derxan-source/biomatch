@@ -15,7 +15,7 @@ async function database() {
       if ((url && !authToken) || (!url && authToken)) throw new Error('Configure TURSO_DATABASE_URL e TURSO_AUTH_TOKEN juntos.');
       if (url) client = createClient({ url, authToken });
       else if (process.env.NODE_ENV === 'production') throw new Error('Banco Turso não configurado no ambiente de produção.');
-      else client = createClient({ url: 'file:./biomatch.local.db' });
+      else client = createClient({ url: process.env.BIOMATCH_LOCAL_DB || 'file:./biomatch.local.db' });
       const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sqlite.sql'), 'utf8');
       const statements = schema.split(';').map(sql => sql.trim()).filter(Boolean);
       for (const sql of statements) await client.execute(sql);
