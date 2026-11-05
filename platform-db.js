@@ -81,7 +81,7 @@ async function snapshot(db, user) {
 function hashToken(token) { return crypto.createHash('sha256').update(token).digest('hex'); }
 function passwordHash(password, salt) { return new Promise((resolve, reject) => crypto.scrypt(password, salt, 64, (error, key) => error ? reject(error) : resolve(key.toString('hex')))); }
 function requestIp(req) {
-  const forwarded = String(req.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
+  const forwarded = String(req.headers?.['x-forwarded-for'] || '').split(',').map(value => value.trim()).filter(Boolean).at(-1);
   return forwarded || req.socket?.remoteAddress || 'unknown';
 }
 async function authRateLimited(db, key, max, windowMs) {

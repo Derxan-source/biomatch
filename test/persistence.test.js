@@ -74,10 +74,16 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     assert.equal(storedReset.rows.length, 1);
     assert.equal(storedReset.rows[0].token_hash, crypto.createHash('sha256').update(resetToken).digest('hex'));
     assert.ok(Number(storedReset.rows[0].expires_at) > Date.now());
+    assert.ok(Number(storedReset.rows[0].expires_at) <= Date.now() + 30 * 60 * 1000);
     assert.notEqual(storedReset.rows[0].token_hash, resetToken);
     const unknownReset = await auth({ action: 'request_password_reset', email: 'ausente@biomatch.test' }, '', '198.51.100.12');
     assert.deepEqual(unknownReset, resetRequest);
     assert.equal(sentEmails.length, 1);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const limited = await auth({ action: 'request_password_reset', email: `limit-${attempt}@biomatch.test` }, '', '198.51.100.55');
+      assert.equal(limited.status, 200);
+    }
+    assert.equal((await auth({ action: 'request_password_reset', email: 'limit-last@biomatch.test' }, '', '198.51.100.55')).status, 429);
     const changedPassword = await auth({ action: 'reset_password', token: resetToken, password: 'senha-nova-456' });
     assert.equal(changedPassword.status, 200);
     assert.equal((await api('GET', 'snapshot', {}, '', account.data.token)).status, 401);
