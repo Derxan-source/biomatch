@@ -1,5 +1,5 @@
 'use strict';
-// Servidor sem dependências: HTTP estático e WebSocket com salas temporárias.
+// Servidor HTTP e WebSocket; o estado de jogo é persistido no Turso.
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const questions=require('./questions.json');
 const generateQuestions=require('./ai-questions');
