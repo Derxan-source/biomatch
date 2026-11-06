@@ -66,28 +66,4 @@ async function loadRooms() {
   return rooms;
 }
 
-async function saveQuestionSet(token, set) {
-  const db = await getDatabase();
-  await db.execute({
-    sql: 'INSERT INTO live_question_sets(token,state_json,expires_at) VALUES(?,?,?) ON CONFLICT(token) DO UPDATE SET state_json=excluded.state_json,expires_at=excluded.expires_at',
-    args: [token, JSON.stringify(set), set.expires]
-  });
-}
-
-async function takeQuestionSet(token) {
-  const db = await getDatabase();
-  const result = await db.execute({
-    sql: 'SELECT state_json,expires_at FROM live_question_sets WHERE token=?',
-    args: [token]
-  });
-  await db.execute({ sql: 'DELETE FROM live_question_sets WHERE token=?', args: [token] });
-  if (!result.rows.length || Number(result.rows[0].expires_at) < Date.now()) return null;
-  try { return JSON.parse(result.rows[0].state_json); } catch { return null; }
-}
-
-async function cleanup() {
-  const db = await getDatabase();
-  await db.execute({ sql: 'DELETE FROM live_question_sets WHERE expires_at < ?', args: [Date.now()] });
-}
-
-module.exports = { saveRoom, deleteRoom, loadRooms, saveQuestionSet, takeQuestionSet, cleanup };
+module.exports = { saveRoom, deleteRoom, loadRooms };

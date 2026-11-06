@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { createClient } = require('@libsql/client');
+const { verifyIdToken } = require('./firebase-auth');
 const questionBank = require('./question-banks.json');
 let client;
 let initialization;
@@ -23,6 +24,7 @@ async function database() {
       const names = new Set(columns.rows.map(row => row.name));
       if (!names.has('email')) await client.execute('ALTER TABLE users ADD COLUMN email TEXT');
       if (!names.has('password_hash')) await client.execute('ALTER TABLE users ADD COLUMN password_hash TEXT');
+      if (!names.has('firebase_migrated')) await client.execute('ALTER TABLE users ADD COLUMN firebase_migrated INTEGER NOT NULL DEFAULT 0');
       await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email COLLATE NOCASE) WHERE email IS NOT NULL');
       return client;
     })().catch(error => { initialization = null; throw error; });
@@ -56,58 +58,28 @@ async function getUser(db, id) {
   const result = await db.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [id] });
   return result.rows[0] || null;
 }
-async function findTarget(db, name, selfId) {
-  const result = await db.execute({ sql: 'SELECT id, display_name FROM users WHERE display_name = ? COLLATE NOCASE AND id <> ? ORDER BY created_at DESC LIMIT 2', args: [name, selfId] });
-  if (result.rows.length > 1) { const error = new Error('Há mais de um visitante com esse apelido. Peça um apelido diferente.'); error.status = 409; throw error; }
-  if (!result.rows.length) { const error = new Error('Não encontramos esse visitante. Confira o apelido e tente novamente.'); error.status = 404; throw error; }
-  return result.rows[0];
-}
-async function snapshot(db, user) {
-  const id = user.id;
-  const [friendRows, messageRows, challengeRows] = await Promise.all([
-    db.execute({ sql: 'SELECT f.requester_id, f.addressee_id, f.status, u.id AS peer_id, u.display_name AS peer_name FROM friendships f JOIN users u ON u.id = CASE WHEN f.requester_id = ? THEN f.addressee_id ELSE f.requester_id END WHERE f.requester_id = ? OR f.addressee_id = ? ORDER BY f.created_at DESC', args: [id, id, id] }),
-    db.execute({ sql: 'SELECT m.sender_id, m.body, sender.display_name AS sender_name, recipient.display_name AS recipient_name FROM direct_messages m JOIN users sender ON sender.id = m.sender_id JOIN users recipient ON recipient.id = m.recipient_id WHERE m.sender_id = ? OR m.recipient_id = ? ORDER BY m.created_at DESC LIMIT 50', args: [id, id] }),
-    db.execute({ sql: 'SELECT c.challenger_id, c.status, challenger.display_name AS challenger_name, challenged.display_name AS challenged_name FROM challenges c JOIN users challenger ON challenger.id = c.challenger_id JOIN users challenged ON challenged.id = c.challenged_id WHERE c.challenger_id = ? OR c.challenged_id = ? ORDER BY c.created_at DESC LIMIT 50', args: [id, id] })
-  ]);
-  return {
-    profile: profile(user),
-    friends: friendRows.rows.map(row => ({ id: row.peer_id, name: row.peer_name, status: row.status === 'accepted' ? 'Amigos' : row.requester_id === id ? 'Convite enviado' : 'Convite recebido' })),
-    messages: messageRows.rows.map(row => ({ from: row.sender_id === id ? 'Você → ' + row.recipient_name : row.sender_name, text: row.body })),
-    challenges: challengeRows.rows.map(row => ({ from: row.challenger_id === id ? 'Você → ' + row.challenged_name : row.challenger_name, status: row.status === 'pending' ? (row.challenger_id === id ? 'Enviado' : 'Recebido') : row.status }))
-  };
-}
-function hashToken(token) { return crypto.createHash('sha256').update(token).digest('hex'); }
-function passwordHash(password, salt) { return new Promise((resolve, reject) => crypto.scrypt(password, salt, 64, (error, key) => error ? reject(error) : resolve(key.toString('hex')))); }
+async function snapshot(db, user) { return { profile: profile(user) }; }
 async function handleAuth(req, res) {
   try {
     if (req.method !== 'POST') return send(res, 405, { error: 'Método não permitido.' });
-    const body = await readBody(req), db = await database(), action = body.action;
-    if (action === 'register') {
-      const name = cleanName(body.name), email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '', password = typeof body.password === 'string' ? body.password : '';
-      if (name.length < 2) return send(res, 400, { error: 'Informe um nome com pelo menos 2 caracteres.' });
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return send(res, 400, { error: 'Informe um e-mail válido.' });
-      if (password.length < 8 || password.length > 128) return send(res, 400, { error: 'A senha precisa ter entre 8 e 128 caracteres.' });
-      const exists = await db.execute({ sql: 'SELECT id FROM users WHERE email = ? COLLATE NOCASE', args: [email] });
-      if (exists.rows.length) return send(res, 409, { error: 'Este e-mail já possui uma conta. Entre ou use outro e-mail.' });
-      const salt = crypto.randomBytes(16).toString('hex'), digest = await passwordHash(password, salt), id = crypto.randomUUID(), token = crypto.randomBytes(32).toString('base64url');
-      await db.execute({ sql: 'INSERT INTO users (id, display_name, email, password_hash) VALUES (?, ?, ?, ?)', args: [id, name, email, salt + ':' + digest] });
-      await db.execute({ sql: 'INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', args: [hashToken(token), id, Date.now() + 30 * 24 * 60 * 60 * 1000] });
-      return send(res, 201, { token, user: profile(await getUser(db, id)) });
-    }
-    if (action === 'login') {
-      const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '', password = typeof body.password === 'string' ? body.password : '';
-      const result = await db.execute({ sql: 'SELECT * FROM users WHERE email = ? COLLATE NOCASE', args: [email] }), user = result.rows[0], stored = user && user.password_hash;
-      if (!stored || !stored.includes(':')) return send(res, 401, { error: 'E-mail ou senha incorretos.' });
-      const [salt, expected] = stored.split(':'), actual = await passwordHash(password, salt);
-      if (!crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(expected, 'hex'))) return send(res, 401, { error: 'E-mail ou senha incorretos.' });
-      const token = crypto.randomBytes(32).toString('base64url');
-      await db.execute({ sql: 'INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', args: [hashToken(token), user.id, Date.now() + 30 * 24 * 60 * 60 * 1000] });
-      return send(res, 200, { token, user: profile(user) });
-    }
-    if (action === 'logout') {
-      const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-      if (token) await db.execute({ sql: 'DELETE FROM auth_sessions WHERE token_hash = ?', args: [hashToken(token)] });
-      return send(res, 200, { ok: true });
+    const body = await readBody(req), action = body.action;
+    if (action === 'logout') return send(res, 200, { ok: true });
+    if (action === 'sync') {
+      const db = await database();
+      const bearer = String(req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
+      const decoded = bearer && await verifyIdToken(bearer[1]);
+      if (!decoded?.uid || !decoded.email) return send(res, 401, { error: 'Sua sessão expirou. Entre novamente.' });
+      const id = decoded.uid, email = decoded.email.trim().toLowerCase(), name = cleanName(body.name) || cleanName(decoded.name) || 'Estudante';
+      const existing = await getUser(db, id);
+      if (existing && existing.email && existing.email.toLowerCase() !== email) return send(res, 409, { error: 'A conta autenticada não corresponde ao perfil existente.' });
+      if (!existing) {
+        const emailOwner = await db.execute({ sql: 'SELECT id FROM users WHERE email = ? COLLATE NOCASE', args: [email] });
+        if (emailOwner.rows.length) return send(res, 409, { error: 'Este e-mail está associado a uma conta antiga ainda não migrada.' });
+        await db.execute({ sql: 'INSERT INTO users (id, display_name, email, password_hash) VALUES (?, ?, ?, NULL)', args: [id, name, email] });
+      } else if (!existing.email) {
+        await db.execute({ sql: 'UPDATE users SET email = ? WHERE id = ?', args: [email, id] });
+      }
+      return send(res, 200, { user: profile(await getUser(db, id)) });
     }
     return send(res, 404, { error: 'Ação de autenticação não encontrada.' });
   } catch (error) {
@@ -134,8 +106,8 @@ async function handlePlatform(req, res) {
     const bearer = String(req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
     let user = null;
     if (bearer) {
-      const auth = await db.execute({ sql: 'SELECT u.* FROM auth_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?', args: [hashToken(bearer[1]), Date.now()] });
-      user = auth.rows[0] || null;
+      const decoded = await verifyIdToken(bearer[1]);
+      user = decoded?.uid ? await getUser(db, decoded.uid) : null;
     } else user = await getUser(db, guestId);
     if (!user) return send(res, 401, { error: 'Perfil visitante não encontrado. Entre novamente ou verifique os dados salvos neste dispositivo.' });
     if (action === 'snapshot') return send(res, 200, await snapshot(db, user));
@@ -178,23 +150,6 @@ async function handlePlatform(req, res) {
     if (action === 'leaderboard') {
       const result = await db.execute({ sql: 'SELECT display_name, xp FROM users ORDER BY xp DESC, created_at ASC LIMIT 50' });
       return send(res, 200, { rows: result.rows.map(row => ({ name: row.display_name, xp: Number(row.xp), level: Math.floor(Number(row.xp) / 500) + 1 })) });
-    }
-    if (action === 'friend' || action === 'message' || action === 'challenge') {
-      const targetName = cleanName(action === 'friend' ? body.name : body.to);
-      if (targetName.length < 2) return send(res, 400, { error: 'Informe um apelido válido.' });
-      const target = await findTarget(db, targetName, user.id);
-      if (action === 'friend') {
-        await db.execute({ sql: 'INSERT INTO friendships (requester_id, addressee_id, status) VALUES (?, ?, ?)', args: [user.id, target.id, 'pending'] });
-        return send(res, 201, { ok: true });
-      }
-      if (action === 'message') {
-        const message = typeof body.text === 'string' ? body.text.trim().slice(0, 240) : '';
-        if (!message) return send(res, 400, { error: 'Escreva uma mensagem.' });
-        await db.execute({ sql: 'INSERT INTO direct_messages (sender_id, recipient_id, body) VALUES (?, ?, ?)', args: [user.id, target.id, message] });
-        return send(res, 201, { ok: true });
-      }
-      await db.execute({ sql: 'INSERT INTO challenges (challenger_id, challenged_id, status) VALUES (?, ?, ?)', args: [user.id, target.id, 'pending'] });
-      return send(res, 201, { ok: true });
     }
     return send(res, 404, { error: 'Ação não encontrada.' });
   } catch (error) {

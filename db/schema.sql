@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL CHECK(length(display_name) BETWEEN 2 AND 18),
   email TEXT,
   password_hash TEXT,
+  firebase_migrated INTEGER NOT NULL DEFAULT 0 CHECK(firebase_migrated IN (0, 1)),
   xp INTEGER NOT NULL DEFAULT 0 CHECK(xp >= 0),
   answers INTEGER NOT NULL DEFAULT 0 CHECK(answers >= 0),
   correct INTEGER NOT NULL DEFAULT 0 CHECK(correct >= 0 AND correct <= answers),
@@ -30,47 +31,11 @@ CREATE TABLE IF NOT EXISTS question_attempts (
   UNIQUE(user_id, question_id)
 );
 CREATE INDEX IF NOT EXISTS idx_attempts_user_created ON question_attempts(user_id, created_at DESC);
-CREATE TABLE IF NOT EXISTS friendships (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  requester_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  addressee_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined')),
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE(requester_id, addressee_id),
-  CHECK(requester_id <> addressee_id)
-);
-CREATE TABLE IF NOT EXISTS direct_messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 240),
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_messages_conversation ON direct_messages(sender_id, recipient_id, created_at DESC);
-CREATE TABLE IF NOT EXISTS challenges (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  challenger_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  challenged_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined', 'completed')),
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  CHECK(challenger_id <> challenged_id)
-);
-CREATE INDEX IF NOT EXISTS idx_challenges_users ON challenges(challenger_id, challenged_id, created_at DESC);
-
-
 CREATE TABLE IF NOT EXISTS live_rooms (
   code TEXT PRIMARY KEY,
   state_json TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE TABLE IF NOT EXISTS live_question_sets (
-  token TEXT PRIMARY KEY,
-  state_json TEXT NOT NULL,
-  expires_at INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_live_question_sets_expiry ON live_question_sets(expires_at);
-
 CREATE TABLE IF NOT EXISTS auth_sessions (
  token_hash TEXT PRIMARY KEY,
  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -79,3 +44,16 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at);
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_reset_expiry ON password_reset_tokens(expires_at);
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+  key_hash TEXT PRIMARY KEY,
+  window_start INTEGER NOT NULL,
+  hit_count INTEGER NOT NULL
+);

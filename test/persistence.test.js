@@ -9,24 +9,30 @@ delete process.env.TURSO_DATABASE_URL;
 delete process.env.TURSO_AUTH_TOKEN;
 
 const { handlePlatform, handleAuth, getDatabase } = require('../platform-db');
+require('../firebase-auth').setAuthForTests({ verifyIdToken: async token => token === 'valid-firebase-token' ? { uid: 'firebase-user-1', email: 'conta@biomatch.test', name: 'Conta Firebase' } : null });
 const liveStore = require('../live-store');
 const questionBank = require('../question-banks.json');
+assert.doesNotMatch(fs.readFileSync('./index.html', 'utf8'), /Continuar com Google|href=["']\/auth\/google/);
+assert.doesNotMatch(fs.readFileSync('./server.js', 'utf8'), /\/auth\/google/);
 
-function request(method, url, body) {
+function request(method, url, body, ip = '127.0.0.1') {
   const req = Readable.from(method === 'POST' ? [JSON.stringify(body || {})] : []);
   req.method = method;
   req.url = url;
+  req.headers = {};
+  req.socket = { remoteAddress: ip };
   return req;
 }
 function response() {
   return {
     status: 0,
     body: '',
-    writeHead(status) { this.status = status; },
+    headers: {},
+    writeHead(status, headers = {}) { this.status = status; this.headers = headers; },
     end(value) { this.body = value || ''; }
   };
 }
-async function auth(body, token = '') { const req = request('POST', '/api/auth', body); req.headers = token ? { authorization: 'Bearer ' + token } : {}; const res = response(); await handleAuth(req, res); return { status: res.status, data: JSON.parse(res.body || '{}') }; }
+async function auth(body, token = '', ip) { const req = request('POST', '/api/auth', body, ip); if (token) req.headers.authorization = 'Bearer ' + token; const res = response(); await handleAuth(req, res); return { status: res.status, data: JSON.parse(res.body || '{}') }; }
 async function api(method, action, body = {}, guestId = '', token = '') {
   const url = '/api/platform?action=' + encodeURIComponent(action) +
     (guestId ? '&guestId=' + encodeURIComponent(guestId) : '');
@@ -41,16 +47,21 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     try { fs.rmSync('./biomatch.test.db' + suffix); } catch {}
   }
   try {
-    const account = await auth({ action: 'register', name: 'Conta Teste', email: 'conta@biomatch.test', password: 'senha-forte-123' });
-    assert.equal(account.status, 201);
-    assert.ok(account.data.token);
-    const accountSnapshot = await api('GET', 'snapshot', {}, '', account.data.token);
+    const account = await auth({ action: 'sync', name: 'Conta Firebase' }, 'valid-firebase-token');
+    assert.equal(account.status, 200);
+    assert.equal(account.data.user.name, 'Conta Firebase');
+    const accountSnapshot = await api('GET', 'snapshot', {}, '', 'valid-firebase-token');
     assert.equal(accountSnapshot.status, 200);
-    assert.equal(accountSnapshot.data.profile.name, 'Conta Teste');
-    const login = await auth({ action: 'login', email: 'CONTA@BIOMATCH.TEST', password: 'senha-forte-123' });
-    assert.equal(login.status, 200);
-    const invalidLogin = await auth({ action: 'login', email: 'conta@biomatch.test', password: 'senha-errada' });
-    assert.equal(invalidLogin.status, 401);
+    assert.equal(accountSnapshot.data.profile.name, 'Conta Firebase');
+    assert.equal((await auth({ action: 'sync', name: 'Falsificado' }, 'invalid-token')).status, 401);
+    assert.equal((await api('GET', 'snapshot', {}, '', 'invalid-token')).status, 401);
+    const db = await getDatabase();
+    const firebaseProfile = await db.execute({ sql: 'SELECT id, email, password_hash FROM users WHERE id = ?', args: ['firebase-user-1'] });
+    assert.equal(firebaseProfile.rows.length, 1);
+    assert.equal(firebaseProfile.rows[0].email, 'conta@biomatch.test');
+    assert.equal(firebaseProfile.rows[0].password_hash, null);
+    assert.equal((await auth({ action: 'register', email: 'x', password: 'x' })).status, 404);
+    assert.equal((await auth({ action: 'oauth_exchange', code: 'retired-google-login' })).status, 404);
     const guest = await api('POST', 'guest', { name: 'Teste Turso' });
     assert.equal(guest.status, 201);
     const id = guest.data.guestId;
@@ -59,9 +70,23 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     const snapshot = await api('GET', 'snapshot', {}, id);
     assert.equal(snapshot.status, 200);
     assert.equal(snapshot.data.profile.name, 'Teste Turso');
+    assert.deepEqual(Object.keys(snapshot.data), ['profile']);
+    for (const action of ['friend', 'message', 'challenge']) {
+      const disabled = await api('POST', action, { name: 'Outro', to: 'Outro', text: 'Oi' }, id);
+      assert.equal(disabled.status, 404, `${action} stays unavailable until safety controls exist`);
+    }
 
+    const subjects = ['Biologia', 'Química', 'História', 'Informática'];
+    for (const subject of subjects) {
+      const subjectQuestions = questionBank.filter(q => q.subject === subject);
+      assert.equal(subjectQuestions.length, 5, `${subject} must have five starter questions`);
+      for (const question of subjectQuestions) {
+        assert.equal(question.options.length, 4, `${question.id} must have four choices`);
+        assert.ok(Number.isInteger(question.answer) && question.answer >= 0 && question.answer < 4, `${question.id} must have a valid answer`);
+        assert.ok(question.explanation.length > 0, `${question.id} must explain its answer`);
+      }
+    }
     const biology = questionBank.find(q => q.subject === 'Biologia');
-    assert.ok(biology, 'A bank must contain Biology questions');
     const answer = await api('POST', 'answer', { questionId: biology.id, choice: biology.answer }, id);
     assert.equal(answer.status, 200);
     assert.equal(answer.data.correct, true);
@@ -86,15 +111,8 @@ async function api(method, action, body = {}, guestId = '', token = '') {
     assert.ok(restored.some(item => item.code === room.code));
     await liveStore.deleteRoom(room.code);
 
-    const token = 'test-question-token';
-    await liveStore.saveQuestionSet(token, { questions: [biology], count: 1, expires: Date.now() + 10000 });
-    const set = await liveStore.takeQuestionSet(token);
-    assert.equal(set.count, 1);
-    assert.equal(await liveStore.takeQuestionSet(token), null);
-
-    const db = await getDatabase();
     await db.close();
-    console.log('Persistence tests passed: email registration/login, bearer session, guests, progress, duplicate protection, leaderboard, live rooms and generated sets.');
+    console.log('Persistence tests passed: Firebase token sync and verification, guests, progress, duplicate protection, leaderboard and live persistence.');
   } catch (error) {
     console.error(error);
     process.exitCode = 1;
