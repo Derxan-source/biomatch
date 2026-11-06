@@ -1,0 +1,282 @@
+[
+  {
+    "id": "bio-dna",
+    "subject": "Biologia",
+    "topic": "Genética",
+    "question": "Qual molécula guarda a maior parte da informação hereditária?",
+    "options": [
+      "ATP",
+      "DNA",
+      "Glicose",
+      "Colesterol"
+    ],
+    "answer": 1,
+    "explanation": "O DNA armazena a informação genética em sequências de nucleotídeos."
+  },
+  {
+    "id": "bio-cell",
+    "subject": "Biologia",
+    "topic": "Citologia",
+    "question": "Qual estrutura controla a entrada e saída de substâncias da célula?",
+    "options": [
+      "Membrana plasmática",
+      "Ribossomo",
+      "Nucléolo",
+      "Centríolo"
+    ],
+    "answer": 0,
+    "explanation": "A membrana plasmática delimita a célula e regula trocas com o ambiente."
+  },
+  {
+    "id": "bio-meiosis",
+    "subject": "Biologia",
+    "topic": "Genética",
+    "question": "Qual divisão celular forma gametas com metade dos cromossomos?",
+    "options": [
+      "Mitose",
+      "Meiose",
+      "Brotamento",
+      "Fissão binária"
+    ],
+    "answer": 1,
+    "explanation": "A meiose reduz à metade o número de cromossomos e gera variabilidade."
+  },
+  {
+    "id": "bio-photo",
+    "subject": "Biologia",
+    "topic": "Ecologia",
+    "question": "Qual gás é absorvido pelas plantas na fotossíntese?",
+    "options": [
+      "Oxigênio",
+      "Nitrogênio",
+      "Dióxido de carbono",
+      "Hidrogênio"
+    ],
+    "answer": 2,
+    "explanation": "Na fotossíntese, plantas usam CO₂ e água para produzir matéria orgânica."
+  },
+  {
+    "id": "bio-heart",
+    "subject": "Biologia",
+    "topic": "Fisiologia",
+    "question": "Qual órgão bombeia o sangue pelo corpo humano?",
+    "options": [
+      "Pulmão",
+      "Fígado",
+      "Rim",
+      "Coração"
+    ],
+    "answer": 3,
+    "explanation": "O coração impulsiona o sangue pela circulação pulmonar e sistêmica."
+  },
+  {
+    "id": "chem-atom",
+    "subject": "Química",
+    "topic": "Atomística",
+    "question": "Qual partícula possui carga elétrica negativa?",
+    "options": [
+      "Próton",
+      "Nêutron",
+      "Elétron",
+      "Núcleo"
+    ],
+    "answer": 2,
+    "explanation": "Elétrons possuem carga negativa e ocupam regiões ao redor do núcleo."
+  },
+  {
+    "id": "chem-ph",
+    "subject": "Química",
+    "topic": "Soluções",
+    "question": "Uma solução com pH 3 é classificada como:",
+    "options": [
+      "Ácida",
+      "Neutra",
+      "Básica",
+      "Saturada"
+    ],
+    "answer": 0,
+    "explanation": "Valores de pH abaixo de 7 indicam caráter ácido em condições usuais."
+  },
+  {
+    "id": "chem-bond",
+    "subject": "Química",
+    "topic": "Ligações",
+    "question": "Qual ligação ocorre com compartilhamento de elétrons?",
+    "options": [
+      "Iônica",
+      "Covalente",
+      "Metálica",
+      "Nuclear"
+    ],
+    "answer": 1,
+    "explanation": "Na ligação covalente, átomos compartilham pares de elétrons."
+  },
+  {
+    "id": "chem-period",
+    "subject": "Química",
+    "topic": "Tabela periódica",
+    "question": "Elementos de uma mesma família geralmente apresentam:",
+    "options": [
+      "Mesmo número de camadas",
+      "Mesmo número de nêutrons",
+      "Propriedades químicas semelhantes",
+      "Mesma massa"
+    ],
+    "answer": 2,
+    "explanation": "Elementos de um grupo têm configurações de valência semelhantes."
+  },
+  {
+    "id": "chem-mass",
+    "subject": "Química",
+    "topic": "Estequiometria",
+    "question": "Pela conservação da massa, em um sistema fechado:",
+    "options": [
+      "A massa total se conserva",
+      "A massa sempre aumenta",
+      "Átomos desaparecem",
+      "Produtos não têm massa"
+    ],
+    "answer": 0,
+    "explanation": "Nas reações, os átomos se reorganizam e a massa total se conserva."
+  },
+  {
+    "id": "hist-sumer",
+    "subject": "História",
+    "topic": "Antiguidade",
+    "question": "Qual civilização desenvolveu a escrita cuneiforme na Mesopotâmia?",
+    "options": [
+      "Egípcia",
+      "Suméria",
+      "Romana",
+      "Fenícia"
+    ],
+    "answer": 1,
+    "explanation": "Os sumérios desenvolveram uma das primeiras formas conhecidas de escrita."
+  },
+  {
+    "id": "hist-athens",
+    "subject": "História",
+    "topic": "Antiguidade",
+    "question": "A democracia ateniense surgiu na:",
+    "options": [
+      "Grécia Antiga",
+      "Roma Imperial",
+      "Mesopotâmia",
+      "China Han"
+    ],
+    "answer": 0,
+    "explanation": "Atenas desenvolveu instituições democráticas diretas, embora restritas a parte da população."
+  },
+  {
+    "id": "hist-feudal",
+    "subject": "História",
+    "topic": "Idade Média",
+    "question": "O feudalismo europeu se organizava principalmente em torno de:",
+    "options": [
+      "Fábricas urbanas",
+      "Grandes propriedades rurais",
+      "Comércio transatlântico",
+      "Indústrias"
+    ],
+    "answer": 1,
+    "explanation": "A terra e as relações de dependência eram centrais na sociedade feudal."
+  },
+  {
+    "id": "hist-brazil",
+    "subject": "História",
+    "topic": "Brasil",
+    "question": "A Independência do Brasil foi proclamada em:",
+    "options": [
+      "1500",
+      "1789",
+      "1822",
+      "1889"
+    ],
+    "answer": 2,
+    "explanation": "A separação política de Portugal foi proclamada em 7 de setembro de 1822."
+  },
+  {
+    "id": "hist-industry",
+    "subject": "História",
+    "topic": "Idade Contemporânea",
+    "question": "A Primeira Revolução Industrial começou na:",
+    "options": [
+      "França",
+      "Inglaterra",
+      "Rússia",
+      "Espanha"
+    ],
+    "answer": 1,
+    "explanation": "A industrialização começou na Inglaterra no século XVIII."
+  },
+  {
+    "id": "it-cpu",
+    "subject": "Informática",
+    "topic": "Hardware",
+    "question": "Qual componente executa instruções e cálculos do computador?",
+    "options": [
+      "SSD",
+      "CPU",
+      "Monitor",
+      "Teclado"
+    ],
+    "answer": 1,
+    "explanation": "A CPU interpreta e executa instruções dos programas."
+  },
+  {
+    "id": "it-ram",
+    "subject": "Informática",
+    "topic": "Hardware",
+    "question": "A memória RAM é usada principalmente para:",
+    "options": [
+      "Armazenamento permanente",
+      "Guardar dados temporários em uso",
+      "Conectar à internet",
+      "Exibir imagens"
+    ],
+    "answer": 1,
+    "explanation": "A RAM mantém dados e instruções temporários para acesso rápido pelo processador."
+  },
+  {
+    "id": "it-html",
+    "subject": "Informática",
+    "topic": "Web",
+    "question": "HTML é usado principalmente para:",
+    "options": [
+      "Estruturar páginas web",
+      "Editar vídeos",
+      "Gerenciar redes elétricas",
+      "Criptografar discos"
+    ],
+    "answer": 0,
+    "explanation": "HTML define a estrutura e o significado do conteúdo de páginas web."
+  },
+  {
+    "id": "it-security",
+    "subject": "Informática",
+    "topic": "Segurança",
+    "question": "Qual prática ajuda a proteger contas online?",
+    "options": [
+      "Reutilizar a mesma senha",
+      "Compartilhar códigos",
+      "Ativar autenticação em dois fatores",
+      "Desativar atualizações"
+    ],
+    "answer": 2,
+    "explanation": "A autenticação em dois fatores adiciona uma camada extra além da senha."
+  },
+  {
+    "id": "it-algo",
+    "subject": "Informática",
+    "topic": "Lógica",
+    "question": "Um algoritmo é:",
+    "options": [
+      "Uma peça física",
+      "Uma sequência finita de instruções para resolver uma tarefa",
+      "Um tipo de monitor",
+      "Uma linguagem exclusiva"
+    ],
+    "answer": 1,
+    "explanation": "Algoritmos descrevem passos ordenados para realizar tarefas ou resolver problemas."
+  }
+]
